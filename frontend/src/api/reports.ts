@@ -2,11 +2,13 @@ import type { LedgerPageExtraction } from '../types/extraction';
 
 export class ReportApiError extends Error {
   statusCode: number;
+  errorData?: any;
 
-  constructor(message: string, statusCode: number) {
+  constructor(message: string, statusCode: number, errorData?: any) {
     super(message);
     this.name = 'ReportApiError';
     this.statusCode = statusCode;
+    this.errorData = errorData;
   }
 }
 
@@ -19,6 +21,7 @@ export class ReportApiError extends Error {
  * @param businessAddress Optional business physical address.
  * @param natureOfBusiness Optional nature/trade category of business.
  * @param statementReference Optional statement reference.
+ * @param acknowledgeDiscrepancies Whether the user has explicitly acknowledged totaling discrepancies.
  * @returns Blob of the binary PDF file.
  */
 export async function downloadPDFReport(
@@ -26,7 +29,8 @@ export async function downloadPDFReport(
   businessName?: string,
   businessAddress?: string,
   natureOfBusiness?: string,
-  statementReference?: string
+  statementReference?: string,
+  acknowledgeDiscrepancies: boolean = false
 ): Promise<Blob> {
   let response: Response;
   try {
@@ -41,6 +45,7 @@ export async function downloadPDFReport(
         business_address: businessAddress || null,
         nature_of_business: natureOfBusiness || null,
         statement_reference: statementReference || null,
+        acknowledge_discrepancies: acknowledgeDiscrepancies,
       }),
     });
   } catch {
@@ -52,17 +57,22 @@ export async function downloadPDFReport(
 
   if (!response.ok) {
     let errorDetail = `Failed to generate PDF report (HTTP ${response.status})`;
+    let parsedData: any = null;
     try {
       const errJson = await response.json();
-      if (errJson && errJson.detail) {
-        errorDetail = errJson.detail;
+      if (errJson) {
+        parsedData = errJson.detail || errJson;
+        if (typeof errJson.detail === 'string') {
+          errorDetail = errJson.detail;
+        } else if (errJson.detail && errJson.detail.message) {
+          errorDetail = errJson.detail.message;
+        }
       }
     } catch {
       // response was not JSON
     }
-    throw new ReportApiError(errorDetail, response.status);
+    throw new ReportApiError(errorDetail, response.status, parsedData);
   }
 
   return await response.blob();
 }
-

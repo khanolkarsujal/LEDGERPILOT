@@ -7,6 +7,7 @@ import {
   Sparkles,
   Pencil,
   Tag,
+  Trash2,
 } from 'lucide-react';
 import type { ExtractedLedgerEntry } from '../types/extraction';
 import './EntryReviewModal.css';
@@ -22,6 +23,7 @@ interface EntryReviewModalProps {
     review_note?: string | null;
   }) => void;
   onConfirmAsIs: () => void;
+  onDelete?: () => void;
 }
 
 export function EntryReviewModal({
@@ -31,11 +33,11 @@ export function EntryReviewModal({
   onClose,
   onSave,
   onConfirmAsIs,
+  onDelete,
 }: EntryReviewModalProps) {
   if (!isOpen || !entry) return null;
 
   // Initialize editable state
-  // Check if entry was previously reviewed or fallback to raw AI values
   const initialDesc =
     entry.corrected_marathi_text !== undefined
       ? entry.corrected_marathi_text || ''
@@ -100,18 +102,23 @@ export function EntryReviewModal({
     e.preventDefault();
     setError(null);
 
+    const trimmedDesc = description.trim();
+    if (!trimmedDesc) {
+      setError('Description cannot be empty. Please enter a service/transaction description or delete the entry.');
+      return;
+    }
+
     let parsedAmount: number | null = null;
     if (isNotRecorded) {
       parsedAmount = null;
     } else {
       const trimmed = amount.trim();
       if (trimmed === '') {
-        // If left empty and not explicitly marked unrecorded, keep as null (Not recorded)
         parsedAmount = null;
       } else {
         const num = Number(trimmed);
         if (isNaN(num) || num < 0) {
-          setError('Please enter a valid positive numerical amount (e.g. 40, 150), or select "Not Recorded".');
+          setError('Please enter a valid positive numerical amount (e.g. 40, 150), or mark as "Not Recorded".');
           return;
         }
         parsedAmount = num;
@@ -119,7 +126,7 @@ export function EntryReviewModal({
     }
 
     onSave({
-      corrected_marathi_text: description.trim() || null,
+      corrected_marathi_text: trimmedDesc,
       corrected_amount: parsedAmount,
       review_note: reviewNote.trim() || null,
     });
@@ -152,7 +159,7 @@ export function EntryReviewModal({
             </div>
             <div>
               <h2 id="review-modal-title" className="review-modal__title">
-                Review & Correct Entry #{entry.entry_index}
+                Review & Confirm Entry #{entry.entry_index}
               </h2>
               <span className="review-modal__subtitle marathi-font">{groupTitle}</span>
             </div>
@@ -169,7 +176,7 @@ export function EntryReviewModal({
 
         {/* Modal Body */}
         <div className="review-modal__body">
-          {/* Flag Context Banner (if flagged by AI) */}
+          {/* Flag Context Banner */}
           {isFlagged && (
             <div className="review-modal__flag-banner" role="alert">
               <AlertTriangle size={18} className="review-modal__flag-icon" aria-hidden="true" />
@@ -221,7 +228,7 @@ export function EntryReviewModal({
             <div className="review-modal__field">
               <label htmlFor="review-desc-input" className="review-modal__label">
                 <span>Description (Marathi / English)</span>
-                <span className="review-modal__label-hint">Correct handwriting typos or ditto marks</span>
+                <span className="review-modal__label-hint">Required for sales statement</span>
               </label>
               <input
                 id="review-desc-input"
@@ -254,7 +261,7 @@ export function EntryReviewModal({
                   }}
                 >
                   <Tag size={13} aria-hidden="true" />
-                  <span>{isNotRecorded ? '✓ Marked as Not Recorded' : 'Mark as Not Recorded'}</span>
+                  <span>{isNotRecorded ? '✓ Confirmed as Not Recorded' : 'Mark as Not Recorded'}</span>
                 </button>
               </div>
 
@@ -277,8 +284,7 @@ export function EntryReviewModal({
                 <div className="review-modal__unpriced-notice">
                   <span className="review-modal__unpriced-badge">Not recorded</span>
                   <p className="review-modal__unpriced-desc">
-                    This entry has no written price on the physical page. It is excluded from calculations
-                    and will remain Not Recorded unless an amount is entered above.
+                    This entry has no written price on the physical page. It will appear as "Not Recorded" in the statement and is excluded from calculations.
                   </p>
                 </div>
               )}
@@ -296,7 +302,7 @@ export function EntryReviewModal({
                 className="review-modal__input"
                 value={reviewNote}
                 onChange={(e) => setReviewNote(e.target.value)}
-                placeholder="e.g. Verified with shopkeeper price list, or Dit marks confirmed"
+                placeholder="e.g. Verified with shopkeeper price list"
               />
             </div>
           </form>
@@ -304,16 +310,29 @@ export function EntryReviewModal({
 
         {/* Modal Footer Actions */}
         <footer className="review-modal__footer">
-          <button
-            type="button"
-            className="review-modal__cancel-btn"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
+          <div className="review-modal__footer-left">
+            <button
+              type="button"
+              className="review-modal__cancel-btn"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            {onDelete && (
+              <button
+                type="button"
+                className="review-modal__delete-btn-link"
+                onClick={onDelete}
+                title="Delete this transaction permanently"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                <span>Delete</span>
+              </button>
+            )}
+          </div>
 
           <div className="review-modal__footer-right">
-            {/* If user checks and confirms AI extracted correctly without needing changes */}
+            {/* Confirm as is */}
             <button
               type="button"
               className="review-modal__confirm-asis-btn"
@@ -324,7 +343,7 @@ export function EntryReviewModal({
               <span>Confirm As-Is</span>
             </button>
 
-            {/* Save any corrections made */}
+            {/* Save corrections */}
             <button
               type="submit"
               form="entry-review-form"

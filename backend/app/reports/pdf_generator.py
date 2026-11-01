@@ -508,46 +508,76 @@ def generate_pdf_report(
     biz_name_val = business_name.strip() if business_name and business_name.strip() else ""
     biz_addr_val = business_address.strip() if business_address and business_address.strip() else ""
 
-    biz_card_content = [
-        # Card Header
-        [
-            Paragraph("<b>BUSINESS INFORMATION</b>", style_card_heading),
-            "",
-        ],
-        # Field labels + values
-        [
+    has_biz_info = bool(biz_name_val or biz_addr_val)
+
+    if has_biz_info:
+        name_cell = (
             Paragraph(
-                f"<font color='#64748B' size='7'>Business name</font><br/><b>{biz_name_val if biz_name_val else '&nbsp;'}</b>",
+                f"<font color='#64748B' size='7'>Business name</font><br/><b>{biz_name_val}</b>",
                 style_td_reg,
-            ),
+            )
+            if biz_name_val
+            else Paragraph("", style_td_reg)
+        )
+        addr_cell = (
             Paragraph(
-                f"<font color='#64748B' size='7'>Business address</font><br/>{biz_addr_val if biz_addr_val else '&nbsp;'}",
+                f"<font color='#64748B' size='7'>Business address</font><br/>{biz_addr_val}",
                 style_td_reg,
-            ),
-        ],
-        # Bottom row
-        [
-            Paragraph(f"Reporting period: <b>{reporting_period_str}</b>", style_td_reg),
-            Paragraph(f"Prepared on: <b>{prep_date_str}</b>", style_td_right),
-        ],
-    ]
+            )
+            if biz_addr_val
+            else Paragraph("", style_td_reg)
+        )
+        biz_card_content = [
+            # Card Header
+            [
+                Paragraph("<b>BUSINESS INFORMATION</b>", style_card_heading),
+                "",
+            ],
+            # Field labels + values
+            [name_cell, addr_cell],
+            # Bottom row
+            [
+                Paragraph(f"Reporting period: <b>{reporting_period_str}</b>", style_td_reg),
+                Paragraph(f"Prepared on: <b>{prep_date_str}</b>", style_td_right),
+            ],
+        ]
+        t_biz_style = [
+            ("SPAN", (0, 0), (1, 0)),
+            ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_WHITE),
+            ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+            ("LINEBELOW", (0, 1), (1, 1), 0.5, COLOR_LIGHT_BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]
+    else:
+        # When business info is omitted, do not print placeholders or "Not Provided"
+        biz_card_content = [
+            [
+                Paragraph("<b>BUSINESS INFORMATION</b>", style_card_heading),
+                "",
+            ],
+            [
+                Paragraph(f"Reporting period: <b>{reporting_period_str}</b>", style_td_reg),
+                Paragraph(f"Prepared on: <b>{prep_date_str}</b>", style_td_right),
+            ],
+        ]
+        t_biz_style = [
+            ("SPAN", (0, 0), (1, 0)),
+            ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_WHITE),
+            ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+            ("LINEBELOW", (0, 0), (1, 0), 0.5, COLOR_LIGHT_BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]
 
     t_biz_box = Table(biz_card_content, colWidths=[261.63, 261.64])
-    t_biz_box.setStyle(
-        TableStyle(
-            [
-                ("SPAN", (0, 0), (1, 0)),
-                ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_WHITE),
-                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
-                ("LINEBELOW", (0, 1), (1, 1), 0.5, COLOR_LIGHT_BORDER),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
+    t_biz_box.setStyle(TableStyle(t_biz_style))
     story.append(t_biz_box)
     story.append(Spacer(1, 10))
 

@@ -2,99 +2,58 @@
 
 ## General
 
-- Keep modules small and single-purpose
-- Fix root causes, do not layer workarounds
-- Do not mix unrelated concerns in one component, route, or module
-  (for example extraction logic inside a route handler)
-- Never silently guess. Unreadable or uncertain values are `null`
-  and flagged, never filled with a plausible value
-- Prefer plain, readable code over clever code. A teammate should
-  understand any file in a minute
-- Do not add features, libraries, or abstractions that are not in
-  the context files
+- Keep modules small, focused, and single-purpose.
+- Fix root causes; never layer workarounds.
+- Do not mix unrelated concerns in one component, route, or module.
+- Never silently guess. Unreadable or uncertain values are `null` and flagged, never filled with a plausible value.
+- Prefer plain, readable code over clever abstractions.
+- Preserve all existing comments and docstrings that are unrelated to your code changes.
 
-## TypeScript
+## Financial Integrity Standards (Non-Negotiable)
 
-- Strict mode is required throughout the frontend
-- Avoid `any`. Use explicit interfaces or narrowly scoped types
-- Define the transaction row type once (date, description, amount,
-  type, status, flag_reason, source_row) and reuse it everywhere
-- Validate unknown external input, including API responses, at the
-  boundary before trusting it
-- Handle loading, empty, and error states explicitly in every view
+1. **No Invented Data**: Never invent, guess, or synthesize transaction amounts or dates.
+2. **Preserve Missing Values**: Never convert missing, unpriced, or unrecorded amounts into ₹0. An unpriced entry must remain `null` or visibly "Not Recorded".
+3. **No Forcing Totals**: Never modify a line-item amount or subtotal to force arithmetic agreement.
+4. **Separation of Extraction and Human Review**: Store raw AI extractions (`raw_marathi_text`, `amount`, `uncertain_fields`) in immutable fields; store human review decisions (`corrected_marathi_text`, `corrected_amount`, `review_status`, `reviewed_at`) separately.
+5. **Separation of Written and Calculated Totals**: Always calculate line-item sums deterministically from valid entries; never overwrite or alter handwritten subtotals.
+6. **No Misleading Trust Labels**: Never label raw AI extractions as "Verified" or "Human reviewed". Only mark an entry as "Human reviewed" after explicit user confirmation.
+7. **Transparent Discrepancy Reporting**: Always report differences between handwritten subtotals and calculated sums openly; require explicit user acknowledgment before generating formal statements.
+8. **Document Generation Rules**:
+   - Customer-facing PDF statements must NOT contain internal AI/LLM terms ("AI Extracted", "Gemini", "LLM", "Prompt", "machine learning").
+   - Omit unavailable metadata cleanly: if business name or address is not provided, omit the fields; never print "Not Provided", "N/A", or awkward placeholders.
+   - Never describe the document as audited, certified, or guaranteed to be accepted by a lender.
 
-## React
+## Mandatory Review Gate Enforcement
 
-- Use function components and hooks
-- Keep components small. Split the upload view, photo preview,
-  review table, and download action into separate components
-- Keep API calls in `frontend/src/api/`, not inside components
-- Keep server data and UI state separate. Do not duplicate extracted
-  rows across several state stores
-- Edits to a cell update one source of truth (the reviewed rows)
-- The frontend never calls the vision LLM and never holds the API key
-- Design mobile-first. Shopkeepers will use phones, so use large tap
-  targets and keep the review screen usable at narrow widths
+- The backend PDF endpoint (`POST /api/reports/pdf`) must validate that 100% of remaining transactions have `review_status == 'human_reviewed'`. Direct API requests must be rejected with HTTP 422 (`review_gate_failed`).
+- The frontend must disable statement downloads and display remaining unreviewed counts until all transactions are reviewed or deleted.
+- If discrepancies exist between written subtotals and calculated sums, `acknowledge_discrepancies: true` must be validated before statement generation.
+
+## Deletion and Re-Indexing Standards
+
+- Deleting an entry must remove it from the transaction array.
+- Remaining entries must be sequentially re-indexed (`1, 2, 3...`) to maintain formal accounting register integrity.
+- All date-group sums, page sums, discrepancy calculations, and review counts must update immediately upon deletion.
+
+## TypeScript & React
+
+- Strict mode is required throughout the frontend.
+- Avoid `any`. Use explicit interfaces or narrowly scoped types.
+- Define transaction types once in `frontend/src/types/` and reuse everywhere.
+- Design mobile-first with minimum 44px tap targets.
 - Support Unicode text (Marathi, Hindi, English mixed) everywhere.
-  Never assume Latin-only characters
 
-## Python (backend)
+## Python (Backend)
 
-- Use type hints on all functions
-- Use Pydantic models for request and response shapes
-- Keep functions pure where possible. Validation rules take rows in
-  and return flags out, with no side effects
-- Represent money with `Decimal` (or integer paise), never floats
-- Store dates as ISO 8601 (`YYYY-MM-DD`). If a date cannot be read
-  with confidence, return `null` and flag it
-- Handle vision LLM failures explicitly: set a timeout, catch errors,
-  and return a clear message instead of a partial or made-up result
-- Keep secrets in environment variables. Never hardcode API keys
-
-## Styling
-
-- Use CSS custom property tokens. No hardcoded hex values
-- Follow the spacing and border radius scale defined in `ui-context.md`
-- Flagged cells must be visually distinct, and the cue must not rely
-  on color alone (add an icon or label)
-- Keep text readable: sufficient size and contrast, no tiny gray text
+- Use type hints on all functions and methods.
+- Use Pydantic models for request and response validation.
+- Represent monetary amounts with `Decimal` (or float/int in JSON serialization); never rely on floating-point arithmetic for financial calculations.
+- Store dates as ISO 8601 (`YYYY-MM-DD`). If a date is ambiguous, return `null` and flag it.
+- Keep secrets in environment variables (`.env`). Never hardcode API keys.
 
 ## API Routes
 
-- Validate and parse request input before any logic runs
-- Check uploads: allowed image types only, a maximum file size, and a
-  clear error for anything else
-- Keep handlers thin: parse input, call one module, return the result
-- Return consistent response shapes, for example
-  `{ "rows": [...], "flags": [...] }` on success and
-  `{ "error": { "code": "...", "message": "..." } }` on failure
-- Never log image contents or extracted ledger data
-- No auth in the MVP. If accounts are added later, enforce auth and
-  ownership before any mutation and update `architecture.md` first
-
-## Data and Storage
-
-- Session data (current page, rows, flags, corrections) lives in
-  memory for the MVP
-- Do not persist ledger photos or extracted data by default
-- Generate the Excel export on demand and stream it. Do not store it
-- Test photos and ground truth live in `tests/data/` only, with
-  private details hidden
-- If a database is added later, record the decision in
-  `progress-tracker.md` and update `architecture.md` before building
-
-## File Organization
-
-- `frontend/src/components/` — React components (upload, preview,
-  review table, download)
-- `frontend/src/api/` — Typed calls to the backend
-- `frontend/src/types/` — Shared TypeScript types, including the
-  transaction row
-- `backend/app/api/` — FastAPI routes (thin handlers only)
-- `backend/app/extraction/` — Image preparation and vision LLM calls
-- `backend/app/validation/` — Rule-based checks and flag reasons
-- `backend/app/reports/` — Excel export
-- `backend/app/schemas/` — Pydantic models
-- `tests/` — Backend tests
-- `tests/data/` — Sample ledger photos and hand-typed ground truth
-  (protected; do not edit to make a test pass)
+- Route handlers must remain thin: validate input, call domain modules, return responses.
+- Check uploads: allowed image MIME types (JPEG, PNG), 10 MB maximum size limit.
+- Return consistent error shapes (`{"detail": {"error": "...", "message": "..."}}`).
+- Never log image contents or customer personal data.
