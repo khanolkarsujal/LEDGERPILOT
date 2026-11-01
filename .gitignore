@@ -32,10 +32,13 @@ build/
 .DS_Store
 Thumbs.db
 
-# Test / coverage
+# Test / coverage / logs
 .coverage
 htmlcov/
 .pytest_cache/
+*.log
+scratch/
+
 
 # Vite
 frontend/.vite/

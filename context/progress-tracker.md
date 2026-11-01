@@ -68,10 +68,41 @@ change.
     - Entry amount exact match: 92.59% (50/54 entries)
     - Unpriced / uncertain service line flagging: 100.0% (1/1 unpriced item flagged with `amount: null` and flag reason)
     - Arithmetic error detection capability demonstrated: successfully extracted handwritten recorded totals separately from item sums, exposing shopkeeper discrepancy (₹40 error in Image 1) and cursive ambiguity (Image 2) for downstream Python verification
+- Milestone 2: Frontend–Backend Integration & Live LedgerPilot Dashboard complete
+  - Built FastAPI asynchronous job-based endpoint (`POST /api/extract/jobs`, `GET /api/extract/jobs/{job_id}`) alongside thin synchronous route (`POST /api/extract`)
+  - Enforced strict 10 MB upload limit, allowed image MIME validation (JPEG, PNG), and Pillow image verification
+  - Implemented non-blocking background thread execution via `starlette.concurrency.run_in_threadpool`, ensuring `/health` responds with sub-millisecond latency (0.002s) during active extraction
+  - Engineered 6-stage lifecycle event logging (`upload_received`, `preprocessing`, `gemini_request_started`, `waiting_gemini`, `parsing_extraction`, `completed`/`failed`) streamed to the frontend
+  - Developed full split-screen review dashboard (`ExtractionResultView.tsx` and `.css`) featuring collapsible/expandable document viewer, dual-tab interface (Extracted Records vs. Backend Events), and Devanagari typography
+- Dashboard Trust & Arithmetic Feedback complete
+  - Root Cause Analysis on Unpriced Entries (Issue A): Verified that unpriced items (e.g. "peemnant smoothing" where a dash was handwritten) must strictly remain `null` or visibly "Not recorded" and never assigned an invented/default value. Added frontend guard `isEntryUnpriced` checking null/undefined, empty/dash strings, and uncertainty flags.
+  - Local Arithmetic Calculation and Non-Judgmental Discrepancy Messaging (Issue B): Implemented local calculation of valid numeric line-item amounts per date group excluding unpriced items. Group headers display handwritten recorded subtotals and calculated items sums separately. If they differ, the dashboard displays a clear, non-judgmental totaling mismatch banner (e.g. "Possible totaling mismatch: Your written total is ₹440, but the listed entries add up to ₹400 (difference of ₹40). Please review. Note: 1 unpriced entry has no recorded price and is excluded from the calculated sum."). If they match, a green match confirmation is displayed.
+  - Truthful Verification Labels (Issue C): Removed all misleading "Verified" labels on raw AI-extracted data. Standardized on `"AI extracted"` for unflagged items and `"Needs review"` with specific reasons for flagged items. Top status pill now explicitly states `"AI Extracted • Pending Review"`, reserving `"Human reviewed"` only for post-confirmation states.
+  - Entry Counts and Page Financial Reconciliation (Issue D): Verified total entry counts against backend responses. Added a comprehensive Page Financial Reconciliation card at the bottom of the records view, distinguishing between: (1) Sum of itemized entries (calculated sum across all groups), (2) Sum of group written subtotals, and (3) Explicit handwritten page grand total.
+- Manual Review & Correction Workflow complete
+  - Extended Pydantic and TypeScript extraction schemas with non-destructive human review tracking fields (`review_status`, `corrected_marathi_text`, `corrected_amount`, `reviewed_at`, `review_note`), ensuring original AI extractions (`raw_marathi_text`, `amount`, `uncertain_fields`, `flag_reason`) remain completely immutable and preserved.
+  - Implemented `EntryReviewModal` component offering mobile bottom sheet and desktop centered review modal with clear side-by-side comparison of original AI extraction vs. human corrections.
+  - Added support for correcting Marathi descriptions, entering or correcting amounts, preserving unpriced items as "Not recorded", and confirming AI readings as-is.
+  - Enforced strict review state transition: entries remain `needs_review` when viewed or cancelled; only explicit "Save & Confirm" or "Confirm As-Is" transitions status to `human_reviewed`.
+  - Wired real-time recalculation: saving a correction immediately updates date-group calculated totals, page calculated sum, discrepancy comparisons, and overview counts without altering written subtotals.
+  - Created automated 13-case test suite (`tests/test_manual_review_flow.js`) verifying all review operations and recalculations against real benchmark ledger data with 100% pass rate.
+- Professional Business Sales Statement PDF for Loan Documentation complete
+  - Redesigned PDF layout from dashboard representation to a formal accountant-prepared Business Sales Statement and Daily Sales Register suitable as supporting documentation for bank loan applications.
+  - Implemented 5 formal document sections:
+    1. Header & Business Information Table: Formal header with preparation date, statement reference number, trade name, business address, nature of business, statement period, and currency (INR / ₹).
+    2. Daily Sales Register: 4-column accountant transaction register (`Date`, `Sr. No.`, `Particulars / Description`, `Amount (₹)`) with native Devanagari typography (`NirmalaUI`), right-aligned amounts, unpriced items explicitly marked as `"Not Recorded"`, and per-section calculated daily totals and handwritten recorded subtotals with variance analysis.
+    3. Period Sales Summary: Tabular overview separating Total Calculated Sales (dynamically calculated) from Sum of Recorded Daily Subtotals and Written Grand Total, along with transparent counts for total, priced, unpriced, pending confirmation, and confirmed transactions.
+    4. Sales Reconciliation & Discrepancy Analysis: Full section-by-section comparison of recorded subtotals against calculated line-item totals with explicit variance reporting.
+    5. Notes & Regulatory Disclaimer: Standard formal disclaimer note without any internal AI/LLM branding.
+  - Neutral Terminology: Replaced dashboard badges with neutral accounting terms (`Recorded`, `Confirmed`, `Pending Confirmation`, `Amount Not Recorded`, `Calculated Daily Total`).
+  - Pagination Optimization: Cleaned margins and spacing so multi-section datasets fit balanced across 2 pages without orphan disclaimer pages.
+  - Verified benchmark regression against Section 6 scenario (`ledger_02` sample): 3 sections, 24 entries, 23 priced entries, 1 unpriced entry, calculated total ₹2,040, recorded subtotals ₹2,140, difference ₹100, 2 pending confirmations, no written grand total.
+  - Verified 100% pass rate across all test suites: `tests/test_api_reports.py` (5/5 tests), `tests/test_api_extract.py` (7/7 tests), and `tests/test_manual_review_flow.js` (13/13 tests) with zero external Gemini API calls.
+  - Rendered and visually inspected high-resolution PNG pages (`scratch/pdf_renders/`) confirming accountant aesthetic, accurate typography, and proper table alignment.
 
 ## In Progress
 
-- Model ID verification and test set ground-truth preparation
+- Verification and preparation for Excel report generation (Milestone 3 / Step 8)
 
 ## Next Up
 
