@@ -39,10 +39,37 @@ class LedgerEntry(BaseModel):
         default=None,
         description="Short reason if any field is uncertain or flagged for human review (e.g. 'amount digit smudged', 'unreadable Marathi character').",
     )
+    review_status: Optional[Literal["ai_extracted", "needs_review", "human_reviewed"]] = Field(
+        default=None,
+        description="Review status: 'ai_extracted', 'needs_review', or 'human_reviewed'.",
+    )
+    corrected_marathi_text: Optional[str] = Field(
+        default=None,
+        description="User-corrected Marathi description after human review.",
+    )
+    corrected_amount: Optional[Decimal] = Field(
+        default=None,
+        description="User-corrected transaction amount after human review. Null if unpriced/not recorded.",
+    )
+    reviewed_at: Optional[str] = Field(
+        default=None,
+        description="ISO timestamp of human review confirmation.",
+    )
+    review_note: Optional[str] = Field(
+        default=None,
+        description="Optional human reviewer notes or explanation.",
+    )
 
     @field_validator("amount", mode="before")
     @classmethod
     def parse_amount(cls, v):
+        if v is None or v == "" or (isinstance(v, str) and (v.strip() == "" or v.strip().lower() in ("null", "none", "-", "—"))):
+            return None
+        return v
+
+    @field_validator("corrected_amount", mode="before")
+    @classmethod
+    def parse_corrected_amount(cls, v):
         if v is None or v == "" or (isinstance(v, str) and (v.strip() == "" or v.strip().lower() in ("null", "none", "-", "—"))):
             return None
         return v

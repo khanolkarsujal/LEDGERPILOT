@@ -8,11 +8,12 @@ Orchestrates:
 4. Invariants: Never silently guess; preserve original Marathi; flag unreadable fields.
 """
 
+import io
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, Callable
 
 # Ensure standard output supports UTF-8 on Windows for Devanagari Marathi text
 if hasattr(sys.stdout, "reconfigure"):
@@ -75,31 +76,52 @@ def get_gemini_client() -> genai.Client:
     return genai.Client(api_key=api_key.strip())
 
 
-def prepare_image(image_path: str | Path) -> Image.Image:
+def prepare_image(image_input: Union[str, Path, Image.Image, io.BytesIO]) -> Image.Image:
     """
     Loads and normalizes image orientation using Pillow.
+    Accepts a filepath (str or Path), BytesIO buffer, or existing PIL Image.
     """
-    path = Path(image_path)
+    if isinstance(image_input, Image.Image):
+        return ImageOps.exif_transpose(image_input)
+    if isinstance(image_input, io.BytesIO):
+        img = Image.open(image_input)
+        return ImageOps.exif_transpose(img)
+
+    path = Path(image_input)
     if not path.exists():
-        raise FileNotFoundError(f"Image not found at path: {image_path}")
+        raise FileNotFoundError(f"Image not found at path: {image_input}")
 
     img = Image.open(path)
     img = ImageOps.exif_transpose(img)
     return img
 
 
+def _parse_response(response) -> LedgerPageExtraction:
+    """Parse and validate a Gemini API response into LedgerPageExtraction."""
+    if not response.text:
+        raise RuntimeError("Gemini API returned an empty response text.")
+    try:
+        return LedgerPageExtraction.model_validate_json(response.text)
+    except ValidationError as e:
+        raise RuntimeError(
+            f"Failed to validate Gemini response against LedgerPageExtraction schema: {e}"
+        ) from e
+
+
 def extract_ledger_page(
-    image_path: str | Path,
+    image_path: Union[str, Path, Image.Image, io.BytesIO],
     client: Optional[genai.Client] = None,
     model_name: str = "gemini-2.5-flash",
+    on_stage_change: Optional[Callable[[str, str, Optional[str]], None]] = None,
 ) -> LedgerPageExtraction:
     """
     Extracts structured financial records from a handwritten ledger photo using Gemini.
 
     Args:
-        image_path: Path to the ledger image file.
+        image_path: Path to the ledger image file, buffer, or PIL Image.
         client: Optional pre-configured genai.Client.
         model_name: Gemini model identifier.
+        on_stage_change: Optional callback for lifecycle progress events (stage, message, details).
 
     Returns:
         Validated LedgerPageExtraction Pydantic object.
@@ -107,7 +129,13 @@ def extract_ledger_page(
     if client is None:
         client = get_gemini_client()
 
+    if on_stage_change:
+        on_stage_change("preprocessing", "Normalizing image orientation & EXIF metadata", f"Input: {type(image_path).__name__}")
+
     img = prepare_image(image_path)
+
+    if on_stage_change:
+        on_stage_change("preprocessing", "Image preprocessing completed", f"Dimensions: {img.size[0]}x{img.size[1]} ({img.mode})")
 
     prompt = (
         "Please transcribe this handwritten Marathi ledger page into the structured JSON schema. "
@@ -122,46 +150,75 @@ def extract_ledger_page(
         temperature=0.1,  # Low temperature for deterministic transcription
     )
 
+    if on_stage_change:
+        on_stage_change("gemini_request_started", "Initiating Gemini vision extraction request", f"Initial model: {model_name}")
+
+    # Model fallback chain: try primary, then alternatives if 404 or persistent 503
+    FALLBACK_MODELS = ["gemini-3-flash-preview", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
     actual_model = model_name
-    max_retries = 3
+    max_retries = 2
     last_exception = None
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = client.models.generate_content(
-                model=actual_model,
-                contents=[img, prompt],
-                config=config,
-            )
-            break
-        except Exception as e:
-            err_msg = str(e)
-            last_exception = e
-            # Handle 404 deprecated model fallback
-            if ("not found" in err_msg.lower() or "404" in err_msg or "no longer available" in err_msg.lower()) and actual_model == "gemini-2.5-flash":
-                actual_model = "gemini-3.8-flash"
-                print(f"[!] gemini-2.5-flash unavailable; automatically using fallback model {actual_model}...")
-                continue
-            # Handle transient 503 high demand spikes with backoff
-            if "503" in err_msg or "unavailable" in err_msg.lower():
-                wait_time = attempt * 3
-                print(f"[!] 503 high demand spike encountered (attempt {attempt}/{max_retries}). Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-                continue
-            raise
-    else:
-        raise last_exception or RuntimeError(f"Extraction failed after {max_retries} attempts.")
+    # Build the ordered list of models to try
+    models_to_try = [actual_model]
+    for fb in FALLBACK_MODELS:
+        if fb not in models_to_try:
+            models_to_try.append(fb)
 
-    if not response.text:
-        raise RuntimeError("Gemini API returned an empty response text.")
+    for model_candidate in models_to_try:
+        if on_stage_change:
+            on_stage_change("waiting_gemini", f"Waiting for Gemini vision model ({model_candidate})...", "Transcribing Marathi text, dates, amounts, and subtotals")
 
-    try:
-        extraction = LedgerPageExtraction.model_validate_json(response.text)
-        return extraction
-    except ValidationError as e:
-        raise RuntimeError(
-            f"Failed to validate Gemini response against LedgerPageExtraction schema: {e}"
-        ) from e
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_candidate,
+                    contents=[img, prompt],
+                    config=config,
+                )
+                # Success — record which model was actually used
+                if model_candidate != model_name:
+                    print(f"[!] Using fallback model {model_candidate} (primary {model_name} was unavailable).")
+                
+                if on_stage_change:
+                    on_stage_change("parsing_extraction", f"Received response from {model_candidate}. Validating structured JSON...", f"Payload: {len(response.text or '')} chars")
+
+                extraction = _parse_response(response)
+
+                if on_stage_change:
+                    total_ents = sum(len(g.entries) for g in extraction.groups)
+                    on_stage_change("completed", "Structured extraction validated successfully", f"{len(extraction.groups)} date groups, {total_ents} entries extracted")
+
+                return extraction
+            except Exception as e:
+                err_msg = str(e)
+                last_exception = e
+                # 404: model deprecated or unavailable to this key — skip to next model
+                if "not found" in err_msg.lower() or "404" in err_msg or "no longer available" in err_msg.lower():
+                    print(f"[!] {model_candidate} not available (404). Trying next fallback...")
+                    if on_stage_change:
+                        on_stage_change("waiting_gemini", f"{model_candidate} unavailable (404), trying next model in chain...", "Model unavailable to this key")
+                    break  # break inner retry loop, continue to next model
+                # 503: transient high demand — retry with backoff
+                if "503" in err_msg or "unavailable" in err_msg.lower():
+                    if attempt < max_retries:
+                        wait_time = attempt * 2
+                        print(f"[!] {model_candidate} 503 (attempt {attempt}/{max_retries}). Retrying in {wait_time}s...")
+                        if on_stage_change:
+                            on_stage_change("waiting_gemini", f"{model_candidate} 503 high demand (attempt {attempt}/{max_retries}). Retrying in {wait_time}s...", None)
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        # Exhausted retries for this model — try next fallback
+                        print(f"[!] {model_candidate} exhausted {max_retries} retries with 503. Trying next fallback...")
+                        if on_stage_change:
+                            on_stage_change("waiting_gemini", f"{model_candidate} 503 demand limit reached, switching to fallback...", None)
+                        break
+                raise
+
+    if on_stage_change:
+        on_stage_change("failed", f"Extraction failed: all models unavailable ({str(last_exception)})", None)
+    raise last_exception or RuntimeError("Extraction failed: all models unavailable.")
 
 
 def run_experiment(image_path: str | Path) -> None:
