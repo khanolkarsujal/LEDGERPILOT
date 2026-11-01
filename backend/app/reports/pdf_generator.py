@@ -1,23 +1,36 @@
 """
 Business Sales Statement PDF Generator.
 
-Produces a conventional accountant-prepared Business Sales Statement and
-Daily Sales Register suitable for small business loan documentation and
-supporting financial records.
+Reproduces the exact visual structure, layout, typography, and styling
+of the official template (ledgerpilot_business_sales_statement_template.png):
 
-Design & Architectural Invariants:
-- Generates a formal, accountant-style financial document (white background,
-  dark charcoal/navy headings, clean thin borders, consistent margins).
-- Strictly distinguishes between dynamically calculated amounts and handwritten
-  recorded totals/subtotals.
-- Uses neutral financial terminology: 'Recorded', 'Confirmed',
-  'Pending Confirmation', 'Amount Not Recorded', 'Calculated Daily Total'.
-- Never mentions AI or internal extraction technology in customer-facing PDF.
-- Preserves Marathi Devanagari descriptions verbatim using Nirmala UI font.
-- Never converts missing amounts to 0; marks them as 'Not Recorded' and excludes
-  them from arithmetic sums.
-- Preserves separate handwritten sections even if they share the same date.
-- Shows transparent sales reconciliation with discrepancies clearly stated.
+1. Top Dark Navy Accent Bar on every page (#0A2540)
+2. Document Heading:
+   - Left: BUSINESS SALES STATEMENT / Supporting Financial Records
+   - Right: INR | ₹
+3. Boxed Business Information Card:
+   - Header: BUSINESS INFORMATION
+   - Two-column: Business name | Business address
+   - Divider line
+   - Reporting period: [Start date] - [End date] | Prepared on: [Date]
+4. Section 1: 1. DAILY SALES REGISTER:
+   - Subtitle: Transactions transcribed from the business records provided.
+   - 4-column Table: Date | Sr. No. | Particulars / Description | Amount (₹)
+     (Dark Navy header, date on first row of section, Devanagari text, Not Recorded for unpriced)
+   - Standalone Outlined Box per section: SECTION {N} TOTALS
+     (4 columns: Transactions | Calculated total | Handwritten subtotal | Difference)
+5. Section 2: 2. PERIOD SUMMARY:
+   - Light green background container box (#EAF7EE)
+   - Row 1: Calculated sales total | Recorded daily subtotals | Written grand total
+   - Row 2: Amounts not recorded | Pending confirmation
+6. Section 3: 3. SALES RECONCILIATION:
+   - Subtitle: Reconcile each ledger section separately, including sections sharing a date.
+   - 4-column Table: Date / Section | Recorded subtotal | Calculated total | Difference
+     (Soft grey/blue header #F1F5F9, dark navy text)
+7. IMPORTANT NOTE:
+   - Divider line, heading IMPORTANT NOTE, exact formal disclaimer
+8. Running Footer:
+   - BUSINESS SALES STATEMENT • Supporting Financial Records | Page X of Y
 """
 
 import io
@@ -45,7 +58,22 @@ from reportlab.platypus import (
 from app.schemas.ledger import LedgerEntry, LedgerPageExtraction, TransactionGroup
 
 # -----------------------------------------------------------------------------
-# Font Registration (Native Devanagari & Rupee Symbol Support)
+# Color Palette (Matching Template Exactly)
+# -----------------------------------------------------------------------------
+COLOR_PRIMARY_NAVY = colors.HexColor("#0A2540")   # Headings, top bar, register header
+COLOR_BORDER_GREY = colors.HexColor("#CBD5E1")    # Card and table borders
+COLOR_LIGHT_BORDER = colors.HexColor("#E2E8F0")   # Internal card dividers
+COLOR_BG_WHITE = colors.HexColor("#FFFFFF")
+COLOR_BG_LIGHT_GREY = colors.HexColor("#F8FAFC")
+COLOR_BG_LIGHT_BLUE = colors.HexColor("#F1F5F9")  # Reconciliation header
+COLOR_BG_LIGHT_GREEN = colors.HexColor("#EAF7EE") # Period summary box
+COLOR_BORDER_GREEN = colors.HexColor("#C8E6C9")
+COLOR_TEXT_DARK = colors.HexColor("#0F172A")
+COLOR_TEXT_MUTED = colors.HexColor("#475569")
+COLOR_TEXT_SUBTLE = colors.HexColor("#64748B")
+
+# -----------------------------------------------------------------------------
+# Font Registration (Devanagari Unicode & Rupee Symbol)
 # -----------------------------------------------------------------------------
 FONT_REGULAR = "NirmalaUI"
 FONT_BOLD = "NirmalaUI-Bold"
@@ -53,7 +81,7 @@ _FONTS_INITIALIZED = False
 
 
 def _init_fonts() -> Tuple[str, str]:
-    """Registers Nirmala UI for Devanagari Marathi text; falls back gracefully."""
+    """Registers Nirmala UI font with graceful fallbacks."""
     global _FONTS_INITIALIZED, FONT_REGULAR, FONT_BOLD
     if _FONTS_INITIALIZED:
         return FONT_REGULAR, FONT_BOLD
@@ -83,7 +111,7 @@ def _init_fonts() -> Tuple[str, str]:
             _FONTS_INITIALIZED = True
             return FONT_REGULAR, FONT_BOLD
     except Exception as e:
-        print(f"[!] PDF Font registration warning: {e}. Falling back to standard fonts.")
+        print(f"[!] PDF Font warning: {e}. Falling back to standard fonts.")
 
     FONT_REGULAR = "Helvetica"
     FONT_BOLD = "Helvetica-Bold"
@@ -92,7 +120,7 @@ def _init_fonts() -> Tuple[str, str]:
 
 
 # -----------------------------------------------------------------------------
-# Financial Calculation Helpers (Deterministic Parity)
+# Financial Data & Formatting Helpers
 # -----------------------------------------------------------------------------
 def get_effective_description(entry: LedgerEntry) -> str:
     """Returns human-corrected description if reviewed; otherwise raw recorded text."""
@@ -114,10 +142,7 @@ def get_effective_amount(entry: LedgerEntry) -> Optional[Decimal]:
 
 
 def is_entry_unpriced(entry: LedgerEntry) -> bool:
-    """
-    Checks if entry has no recorded price.
-    Guarantees unpriced items remain null and are excluded from arithmetic.
-    """
+    """Identifies entries where amount was not recorded on physical ledger."""
     if entry.review_status == "human_reviewed" and entry.corrected_amount is not None:
         return False
     if entry.review_status == "human_reviewed" and entry.corrected_amount is None:
@@ -148,7 +173,7 @@ def is_entry_unpriced(entry: LedgerEntry) -> bool:
 
 
 def is_entry_pending_confirmation(entry: LedgerEntry) -> bool:
-    """Identifies entries that require human confirmation or review."""
+    """Identifies entries requiring confirmation (uncertain or flagged without human review)."""
     if entry.review_status == "human_reviewed":
         return False
     if entry.uncertain_fields or entry.flag_reason or is_entry_unpriced(entry):
@@ -157,7 +182,7 @@ def is_entry_pending_confirmation(entry: LedgerEntry) -> bool:
 
 
 def calculate_group_sum(group: TransactionGroup) -> Decimal:
-    """Computes arithmetic sum of valid priced line items in a ledger section."""
+    """Sums valid priced amounts in a section."""
     total = Decimal("0")
     for e in group.entries:
         if not is_entry_unpriced(e):
@@ -168,17 +193,29 @@ def calculate_group_sum(group: TransactionGroup) -> Decimal:
 
 
 def format_inr(amount: Optional[Decimal]) -> str:
-    """Formats a decimal amount in Indian Rupees format (e.g. ₹2,040.00)."""
+    """Formats amount with Indian Rupee symbol."""
     if amount is None:
         return "Not Recorded"
-    return f"₹{amount:,.2f}"
+    return f"₹ {amount:,.2f}"
+
+
+def format_date_ddmmyyyy(raw_date: Optional[str], iso_date: Optional[str]) -> str:
+    """Formats date to DD/MM/YYYY or cleanly formatted display string."""
+    if iso_date and len(iso_date) == 10 and iso_date.count("-") == 2:
+        parts = iso_date.split("-")
+        return f"{parts[2]}/{parts[1]}/{parts[0]}"
+    if raw_date:
+        clean = raw_date.replace("\n", " ").strip()
+        # If raw date already has numbers like 10/11/2019
+        return clean
+    return ""
 
 
 # -----------------------------------------------------------------------------
-# Numbered Canvas for Running Headers & Footers
+# Numbered Canvas for Top Accent Bar & Footer
 # -----------------------------------------------------------------------------
-class NumberedCanvas(canvas.Canvas):
-    """Two-pass canvas recording total page count and rendering formal headers/footers."""
+class TemplateCanvas(canvas.Canvas):
+    """Draws top navy accent bar on all pages and formal footer."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -199,26 +236,22 @@ class NumberedCanvas(canvas.Canvas):
     def draw_page_decorations(self, page_count: int) -> None:
         self.saveState()
         font_reg, _ = _init_fonts()
-        self.setFont(font_reg, 8)
-        self.setFillColor(colors.HexColor("#475569"))
 
-        # Running Top Header (pages 2+)
-        if self._pageNumber > 1:
-            self.drawString(36, 808, "BUSINESS SALES STATEMENT")
-            self.drawRightString(559, 808, "Supporting Financial Records — Daily Sales Register")
-            self.setStrokeColor(colors.HexColor("#CBD5E1"))
-            self.setLineWidth(0.5)
-            self.line(36, 802, 559, 802)
+        # 1. Top Navy Accent Line across the printable top (matching template exactly)
+        self.setFillColor(COLOR_PRIMARY_NAVY)
+        self.rect(36, 814, 523.27, 3.5, fill=1, stroke=0)
 
-        # Running Bottom Footer (all pages)
+        # 2. Running Bottom Footer (matching template exactly)
+        self.setFont(font_reg, 7)
+        self.setFillColor(COLOR_TEXT_SUBTLE)
         page_str = f"Page {self._pageNumber} of {page_count}"
         self.drawRightString(559, 22, page_str)
         self.drawString(
             36,
             22,
-            "Confidential • Supporting Financial Records • Not an Audited Statement",
+            "BUSINESS SALES STATEMENT  •  Supporting Financial Records",
         )
-        self.setStrokeColor(colors.HexColor("#CBD5E1"))
+        self.setStrokeColor(COLOR_BORDER_GREY)
         self.setLineWidth(0.5)
         self.line(36, 32, 559, 32)
         self.restoreState()
@@ -235,17 +268,8 @@ def generate_pdf_report(
     statement_reference: Optional[str] = None,
 ) -> bytes:
     """
-    Generates a formal, conventional Business Sales Statement PDF.
-
-    Args:
-        extraction: Validated LedgerPageExtraction containing date groups and entries.
-        business_name: Optional business or trade name.
-        business_address: Optional business physical address.
-        nature_of_business: Optional nature/category of business.
-        statement_reference: Optional statement reference number.
-
-    Returns:
-        bytes: Raw PDF document bytes.
+    Generates a formal Business Sales Statement PDF strictly matching
+    ledgerpilot_business_sales_statement_template.png.
     """
     font_reg, font_bold = _init_fonts()
 
@@ -254,7 +278,6 @@ def generate_pdf_report(
     total_entries_count = len(all_entries)
     unpriced_count = sum(1 for e in all_entries if is_entry_unpriced(e))
     priced_count = total_entries_count - unpriced_count
-    confirmed_count = sum(1 for e in all_entries if e.review_status == "human_reviewed")
     pending_count = sum(1 for e in all_entries if is_entry_pending_confirmation(e))
 
     # Total calculated sales (sum of all priced entries across groups)
@@ -288,24 +311,22 @@ def generate_pdf_report(
             written_page_total = None
 
     # Date range deduction
-    date_strings: List[str] = []
+    formatted_dates: List[str] = []
     for g in extraction.groups:
-        if g.date_raw:
-            clean_date = g.date_raw.replace("\n", " ").strip()
-            date_strings.append(clean_date)
-        elif g.date_iso:
-            date_strings.append(g.date_iso)
+        d_str = format_date_ddmmyyyy(g.date_raw, g.date_iso)
+        if d_str and d_str not in formatted_dates:
+            formatted_dates.append(d_str)
 
-    if len(date_strings) > 1:
-        statement_period_str = f"{date_strings[0]} to {date_strings[-1]}"
-    elif len(date_strings) == 1:
-        statement_period_str = date_strings[0]
+    if len(formatted_dates) > 1:
+        reporting_period_str = f"{formatted_dates[0]} - {formatted_dates[-1]}"
+    elif len(formatted_dates) == 1:
+        reporting_period_str = formatted_dates[0]
     else:
-        statement_period_str = "Not Specified on Records"
+        reporting_period_str = "Not Specified"
 
-    prep_date_str = datetime.now().strftime("%d %B %Y")
+    prep_date_str = datetime.now().strftime("%d/%m/%Y")
 
-    # Document Setup (A4: 595.27 x 841.89 points, margins 36 pt)
+    # Document Setup (A4: 595.27 x 841.89 points, margins 36 pt / 0.5 in)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -318,527 +339,488 @@ def generate_pdf_report(
 
     styles = getSampleStyleSheet()
 
-    # Style Definitions (Formal accountant typography)
+    # Style Definitions
     style_doc_title = ParagraphStyle(
         "DocTitle",
         fontName=font_bold,
-        fontSize=17,
-        leading=21,
-        textColor=colors.HexColor("#0F172A"),
-        spaceAfter=1,
+        fontSize=18,
+        leading=22,
+        textColor=COLOR_PRIMARY_NAVY,
     )
     style_doc_subtitle = ParagraphStyle(
         "DocSubtitle",
         fontName=font_reg,
         fontSize=9.5,
         leading=13,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=6,
+        textColor=COLOR_TEXT_SUBTLE,
     )
-    style_section_heading = ParagraphStyle(
-        "SectionHeading",
+    style_currency_header = ParagraphStyle(
+        "CurrencyHeader",
         fontName=font_bold,
-        fontSize=10,
+        fontSize=11,
+        leading=15,
+        textColor=COLOR_PRIMARY_NAVY,
+        alignment=2,
+    )
+    style_section_title = ParagraphStyle(
+        "SectionTitle",
+        fontName=font_bold,
+        fontSize=10.5,
         leading=14,
-        textColor=colors.HexColor("#0F172A"),
-        spaceBefore=8,
-        spaceAfter=3,
-    )
-    style_section_sub = ParagraphStyle(
-        "SectionSub",
-        fontName=font_bold,
-        fontSize=8.5,
-        leading=12,
-        textColor=colors.HexColor("#1E293B"),
-        spaceBefore=5,
+        textColor=COLOR_PRIMARY_NAVY,
+        spaceBefore=10,
         spaceAfter=2,
     )
-    style_table_header = ParagraphStyle(
-        "TableHeader",
-        fontName=font_bold,
-        fontSize=8,
-        leading=10.5,
-        textColor=colors.HexColor("#FFFFFF"),
-        alignment=0,
-    )
-    style_table_header_right = ParagraphStyle(
-        "TableHeaderRight",
-        fontName=font_bold,
-        fontSize=8,
-        leading=10.5,
-        textColor=colors.HexColor("#FFFFFF"),
-        alignment=2,
-    )
-    style_cell_reg = ParagraphStyle(
-        "CellReg",
-        fontName=font_reg,
-        fontSize=8,
-        leading=10.5,
-        textColor=colors.HexColor("#1E293B"),
-    )
-    style_cell_bold = ParagraphStyle(
-        "CellBold",
-        fontName=font_bold,
-        fontSize=8,
-        leading=10.5,
-        textColor=colors.HexColor("#0F172A"),
-    )
-    style_cell_muted = ParagraphStyle(
-        "CellMuted",
+    style_section_subtitle = ParagraphStyle(
+        "SectionSubtitle",
         fontName=font_reg,
         fontSize=7.5,
-        leading=9.5,
-        textColor=colors.HexColor("#64748B"),
+        leading=10,
+        textColor=COLOR_TEXT_SUBTLE,
+        spaceAfter=6,
     )
-    style_cell_right = ParagraphStyle(
-        "CellRight",
+    style_card_heading = ParagraphStyle(
+        "CardHeading",
+        fontName=font_bold,
+        fontSize=7.5,
+        leading=10,
+        textColor=COLOR_PRIMARY_NAVY,
+    )
+    style_label_muted = ParagraphStyle(
+        "LabelMuted",
+        fontName=font_reg,
+        fontSize=7,
+        leading=9.5,
+        textColor=COLOR_TEXT_MUTED,
+    )
+    style_val_bold = ParagraphStyle(
+        "ValBold",
+        fontName=font_bold,
+        fontSize=8.5,
+        leading=11.5,
+        textColor=COLOR_TEXT_DARK,
+    )
+    style_val_bold_large = ParagraphStyle(
+        "ValBoldLarge",
+        fontName=font_bold,
+        fontSize=10,
+        leading=13,
+        textColor=COLOR_PRIMARY_NAVY,
+    )
+    style_table_th = ParagraphStyle(
+        "TableTH",
+        fontName=font_bold,
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#FFFFFF"),
+    )
+    style_table_th_right = ParagraphStyle(
+        "TableTHRight",
+        fontName=font_bold,
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#FFFFFF"),
+        alignment=2,
+    )
+    style_table_th_recon = ParagraphStyle(
+        "TableTHRecon",
+        fontName=font_bold,
+        fontSize=7.5,
+        leading=10,
+        textColor=COLOR_PRIMARY_NAVY,
+    )
+    style_table_th_recon_right = ParagraphStyle(
+        "TableTHReconRight",
+        fontName=font_bold,
+        fontSize=7.5,
+        leading=10,
+        textColor=COLOR_PRIMARY_NAVY,
+        alignment=2,
+    )
+    style_td_reg = ParagraphStyle(
+        "TDReg",
         fontName=font_reg,
         fontSize=8,
         leading=10.5,
-        textColor=colors.HexColor("#0F172A"),
+        textColor=COLOR_TEXT_DARK,
+    )
+    style_td_right = ParagraphStyle(
+        "TDRight",
+        fontName=font_reg,
+        fontSize=8,
+        leading=10.5,
+        textColor=COLOR_TEXT_DARK,
         alignment=2,
     )
-    style_cell_right_bold = ParagraphStyle(
-        "CellRightBold",
+    style_td_right_bold = ParagraphStyle(
+        "TDRightBold",
         fontName=font_bold,
         fontSize=8,
         leading=10.5,
-        textColor=colors.HexColor("#0F172A"),
+        textColor=COLOR_TEXT_DARK,
         alignment=2,
     )
-    style_disclaimer = ParagraphStyle(
+    style_disclaimer_text = ParagraphStyle(
         "DisclaimerText",
         fontName=font_reg,
-        fontSize=7.5,
-        leading=10.5,
-        textColor=colors.HexColor("#334155"),
+        fontSize=7,
+        leading=10,
+        textColor=COLOR_TEXT_MUTED,
     )
 
     story: List[Any] = []
 
     # =========================================================================
-    # SECTION A: Formal Document Header
+    # DOCUMENT HEADING
     # =========================================================================
-    effective_business_name = business_name.strip() if business_name and business_name.strip() else "Not Provided"
-
-    header_data = [
+    # Left: BUSINESS SALES STATEMENT / Supporting Financial Records
+    # Right: INR | ₹
+    heading_table = Table(
         [
-            Paragraph("<b>BUSINESS SALES STATEMENT</b>", style_doc_title),
-            Paragraph(f"<b>Date Prepared:</b> {prep_date_str}", style_cell_right),
+            [
+                Paragraph("<b>BUSINESS SALES STATEMENT</b>", style_doc_title),
+                Paragraph("<b>INR  |  ₹</b>", style_currency_header),
+            ],
+            [
+                Paragraph("Supporting Financial Records", style_doc_subtitle),
+                "",
+            ],
         ],
-        [
-            Paragraph("Supporting Financial Records — Daily Sales Register", style_doc_subtitle),
-            Paragraph(
-                f"<b>Statement Ref:</b> {statement_reference.strip()}" if statement_reference and statement_reference.strip() else "",
-                style_cell_right_bold,
-            ),
-        ],
-    ]
-    t_header = Table(header_data, colWidths=[363.27, 160])
-    t_header.setStyle(
+        colWidths=[423.27, 100],
+    )
+    heading_table.setStyle(
         TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-    story.append(t_header)
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0F172A"), spaceBefore=2, spaceAfter=8))
+    story.append(heading_table)
+    story.append(Spacer(1, 8))
 
     # =========================================================================
-    # SECTION B: Business Information Table
+    # BUSINESS INFORMATION CARD (Outlined Box matching template)
     # =========================================================================
-    story.append(Paragraph("1. BUSINESS & STATEMENT INFORMATION", style_section_heading))
+    biz_name_val = business_name.strip() if business_name and business_name.strip() else ""
+    biz_addr_val = business_address.strip() if business_address and business_address.strip() else ""
 
-    biz_rows = [
-        [Paragraph("Business / Trade Name", style_cell_bold), Paragraph(effective_business_name, style_cell_reg)],
+    biz_card_content = [
+        # Card Header
         [
-            Paragraph("Business Address", style_cell_bold),
-            Paragraph(business_address.strip() if business_address and business_address.strip() else "Not Provided", style_cell_reg),
+            Paragraph("<b>BUSINESS INFORMATION</b>", style_card_heading),
+            "",
+        ],
+        # Field labels + values
+        [
+            Paragraph(
+                f"<font color='#64748B' size='7'>Business name</font><br/><b>{biz_name_val if biz_name_val else '&nbsp;'}</b>",
+                style_td_reg,
+            ),
+            Paragraph(
+                f"<font color='#64748B' size='7'>Business address</font><br/>{biz_addr_val if biz_addr_val else '&nbsp;'}",
+                style_td_reg,
+            ),
+        ],
+        # Bottom row
+        [
+            Paragraph(f"Reporting period: <b>{reporting_period_str}</b>", style_td_reg),
+            Paragraph(f"Prepared on: <b>{prep_date_str}</b>", style_td_right),
         ],
     ]
-    if nature_of_business and nature_of_business.strip():
-        biz_rows.append([Paragraph("Nature of Business", style_cell_bold), Paragraph(nature_of_business.strip(), style_cell_reg)])
 
-    biz_rows.extend(
-        [
-            [Paragraph("Statement Period", style_cell_bold), Paragraph(statement_period_str, style_cell_reg)],
-            [Paragraph("Currency", style_cell_bold), Paragraph("Indian Rupees (INR / ₹)", style_cell_reg)],
-            [Paragraph("Documentation Status", style_cell_bold), Paragraph("Supporting Ledger Records (Subject to Loan Review)", style_cell_reg)],
-        ]
-    )
-
-    t_biz = Table(biz_rows, colWidths=[150, 373.27])
-    t_biz.setStyle(
+    t_biz_box = Table(biz_card_content, colWidths=[261.63, 261.64])
+    t_biz_box.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F8FAFC")),
-                ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#FFFFFF")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("SPAN", (0, 0), (1, 0)),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_WHITE),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+                ("LINEBELOW", (0, 1), (1, 1), 0.5, COLOR_LIGHT_BORDER),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ]
         )
     )
-    story.append(t_biz)
-    story.append(Spacer(1, 6))
+    story.append(t_biz_box)
+    story.append(Spacer(1, 10))
 
     # =========================================================================
-    # SECTION C: Daily Sales Register (Main Section)
+    # SECTION 1: 1. DAILY SALES REGISTER
     # =========================================================================
-    story.append(Paragraph("2. DAILY SALES REGISTER", style_section_heading))
+    story.append(Paragraph("<b>1. DAILY SALES REGISTER</b>", style_section_title))
     story.append(
-        Paragraph(
-            "Itemized daily transaction records organized chronologically by ledger section. "
-            "Amounts missing on physical ledger are reported as 'Not Recorded' and excluded from daily totals.",
-            style_cell_muted,
-        )
+        Paragraph("Transactions transcribed from the business records provided.", style_section_subtitle)
     )
-    story.append(Spacer(1, 4))
 
-    # Preserve separate handwritten sections even if they share the same date
+    # Render each ledger section separately (preserving separate handwritten sections)
     for s_idx, group in enumerate(extraction.groups):
         section_num = s_idx + 1
-        date_display = group.date_raw.replace("\n", " ").strip() if group.date_raw else (group.date_iso or f"Section {section_num}")
-        iso_addon = f" (ISO: {group.date_iso})" if group.date_iso and group.date_raw else ""
-        section_title_text = f"Section {section_num} — Date: {date_display}{iso_addon}"
+        section_elements: List[Any] = []
 
-        group_elements: List[Any] = []
-        group_elements.append(Paragraph(section_title_text, style_section_sub))
+        date_formatted = format_date_ddmmyyyy(group.date_raw, group.date_iso)
 
-        # Table Header
+        # 4-column Transaction Table
         table_data: List[List[Any]] = [
             [
-                Paragraph("Date", style_table_header),
-                Paragraph("Sr. No.", style_table_header),
-                Paragraph("Particulars / Description", style_table_header),
-                Paragraph("Amount (₹)", style_table_header_right),
+                Paragraph("Date", style_table_th),
+                Paragraph("Sr. No.", style_table_th),
+                Paragraph("Particulars / Description", style_table_th),
+                Paragraph("Amount (₹)", style_table_th_right),
             ]
         ]
 
-        # Populate transaction rows
         for e_idx, entry in enumerate(group.entries):
             sr_no = str(entry.entry_index if entry.entry_index is not None else e_idx + 1)
             eff_desc = get_effective_description(entry)
             unpriced = is_entry_unpriced(entry)
             amt_val = get_effective_amount(entry)
 
-            # Build description paragraph with status notes if applicable
-            desc_lines = [f"<font name='{font_reg}' size='8.5'>{eff_desc}</font>"]
+            # Date is printed on first row of section; subsequent rows blank
+            row_date = date_formatted if e_idx == 0 else ""
 
-            if entry.review_status == "human_reviewed":
-                desc_lines.append("<font size='7' color='#0B5D45'><b>[Confirmed]</b></font>")
-                if entry.corrected_marathi_text and entry.raw_marathi_text and entry.corrected_marathi_text != entry.raw_marathi_text:
-                    desc_lines.append(f"<font size='7' color='#64748B'><i>(Recorded: {entry.raw_marathi_text})</i></font>")
-                if entry.review_note:
-                    desc_lines.append(f"<font size='7' color='#64748B'><i>(Note: {entry.review_note})</i></font>")
-            elif is_entry_pending_confirmation(entry):
-                reason_note = f" — {entry.flag_reason}" if entry.flag_reason else ""
-                desc_lines.append(f"<font size='7' color='#B45309'><b>[Pending Confirmation]</b></font><font size='7' color='#64748B'><i>{reason_note}</i></font>")
+            # Description Paragraph
+            desc_cell = Paragraph(eff_desc, style_td_reg)
 
-            desc_cell = Paragraph(" ".join(desc_lines), style_cell_reg)
-
-            # Amount formatting
+            # Amount Column
             if unpriced:
-                amt_cell = Paragraph("<i>Not Recorded</i>", style_cell_right)
+                amt_cell = Paragraph("<b>Not Recorded</b>", style_td_right_bold)
             else:
-                amt_cell = Paragraph(format_inr(amt_val), style_cell_right)
-
-            # Row date string (shown cleanly)
-            row_date = group.date_iso or date_display
+                amt_str = f"{amt_val:,.2f}" if amt_val is not None else "0.00"
+                amt_cell = Paragraph(amt_str, style_td_right)
 
             table_data.append([
-                Paragraph(row_date, style_cell_reg),
-                Paragraph(sr_no, style_cell_reg),
+                Paragraph(row_date, style_td_reg),
+                Paragraph(sr_no, style_td_reg),
                 desc_cell,
                 amt_cell,
             ])
 
-        # Date Section Subtotal calculations
-        section_calc_sum = calculate_group_sum(group)
-        section_entries_count = len(group.entries)
-        section_unpriced_count = sum(1 for e in group.entries if is_entry_unpriced(e))
-        section_priced_count = section_entries_count - section_unpriced_count
+        col_widths = [85, 45, 293.27, 100]
+        t_register = Table(table_data, colWidths=col_widths, repeatRows=1)
 
-        rec_subtotal_raw = group.recorded_group_total
-        has_rec_subtotal = (
-            rec_subtotal_raw is not None
-            and str(rec_subtotal_raw).strip().lower() not in ("", "null", "none", "-")
-        )
-        rec_subtotal_val: Optional[Decimal] = Decimal(str(rec_subtotal_raw)) if has_rec_subtotal else None
-
-        # Section Summary Row in table
-        subtotal_label = (
-            f"<b>Calculated Daily Total ({section_priced_count} priced transactions)</b>"
-            if section_unpriced_count == 0
-            else f"<b>Calculated Daily Total ({section_priced_count} priced, {section_unpriced_count} unpriced)</b>"
-        )
-        table_data.append([
-            "",
-            "",
-            Paragraph(subtotal_label, style_cell_reg),
-            Paragraph(f"<b>{format_inr(section_calc_sum)}</b>", style_cell_right_bold),
-        ])
-
-        if has_rec_subtotal and rec_subtotal_val is not None:
-            diff = rec_subtotal_val - section_calc_sum
-            diff_label = (
-                "Matches calculated daily total"
-                if abs(diff) < Decimal("0.001")
-                else f"Difference of {format_inr(abs(diff))} ({'Recorded exceeds calculated' if diff > 0 else 'Calculated exceeds recorded'})"
-            )
-            table_data.append([
-                "",
-                "",
-                Paragraph(f"<b>Recorded Handwritten Subtotal:</b> <font color='#475569'>({diff_label})</font>", style_cell_reg),
-                Paragraph(f"<b>{format_inr(rec_subtotal_val)}</b>", style_cell_right_bold),
-            ])
-        else:
-            table_data.append([
-                "",
-                "",
-                Paragraph("<b>Recorded Handwritten Subtotal:</b> <font color='#64748B'><i>Not Recorded on page</i></font>", style_cell_reg),
-                Paragraph("<i>Not Recorded</i>", style_cell_right),
-            ])
-
-        # Table Column Widths: total 523.27 pt
-        col_widths = [85, 38, 300.27, 100]
-        t_group = Table(table_data, colWidths=col_widths, repeatRows=1)
-
-        t_style = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
-            ("ALIGN", (0, 0), (1, -1), "LEFT"),
-            ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+        t_reg_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARY_NAVY),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
             ("LEFTPADDING", (0, 0), (-1, -1), 5),
             ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ]
 
-        # Alternating row shading for data rows
-        num_rows = len(table_data)
-        summary_rows_count = 2  # Calculated daily total + Recorded subtotal
-        data_rows_count = num_rows - 1 - summary_rows_count
+        t_register.setStyle(TableStyle(t_reg_style))
+        section_elements.append(t_register)
+        section_elements.append(Spacer(1, 4))
 
-        for r_i in range(1, data_rows_count + 1):
-            if r_i % 2 == 0:
-                t_style.append(("BACKGROUND", (0, r_i), (-1, r_i), colors.HexColor("#F8FAFC")))
+        # Standalone SECTION {N} TOTALS Outlined Box (matching template exactly)
+        sec_calc_sum = calculate_group_sum(group)
+        sec_count = len(group.entries)
 
-        # Highlight summary rows
-        t_style.append(("BACKGROUND", (0, num_rows - 2), (-1, num_rows - 1), colors.HexColor("#F1F5F9")))
-        t_style.append(("LINEABOVE", (0, num_rows - 2), (-1, num_rows - 2), 1, colors.HexColor("#94A3B8")))
+        rec_total_raw = group.recorded_group_total
+        has_rec_total = (
+            rec_total_raw is not None
+            and str(rec_total_raw).strip().lower() not in ("", "null", "none", "-")
+        )
 
-        t_group.setStyle(TableStyle(t_style))
-        group_elements.append(t_group)
-        group_elements.append(Spacer(1, 6))
+        if has_rec_total:
+            rec_subtotal_dec = Decimal(str(rec_total_raw))
+            rec_subtotal_str = f"₹ {rec_subtotal_dec:,.2f}"
+            diff_dec = rec_subtotal_dec - sec_calc_sum
+            diff_str = f"₹ {diff_dec:,.2f}"
+        else:
+            rec_subtotal_str = "Not Recorded"
+            diff_str = "—"
+
+        totals_box_data = [
+            [
+                Paragraph(f"<b>SECTION {section_num} TOTALS</b>", style_card_heading),
+                "",
+                "",
+                "",
+            ],
+            [
+                Paragraph(
+                    f"<font color='#64748B' size='7'>Transactions</font><br/><b>{sec_count}</b>",
+                    style_td_reg,
+                ),
+                Paragraph(
+                    f"<font color='#64748B' size='7'>Calculated total</font><br/><b>₹ {sec_calc_sum:,.2f}</b>",
+                    style_td_reg,
+                ),
+                Paragraph(
+                    f"<font color='#64748B' size='7'>Handwritten subtotal</font><br/><b>{rec_subtotal_str}</b>",
+                    style_td_reg,
+                ),
+                Paragraph(
+                    f"<font color='#64748B' size='7'>Difference</font><br/><b>{diff_str}</b>",
+                    style_td_reg,
+                ),
+            ],
+        ]
+
+        t_totals_box = Table(totals_box_data, colWidths=[110, 140, 140, 133.27])
+        t_totals_box.setStyle(
+            TableStyle(
+                [
+                    ("SPAN", (0, 0), (3, 0)),
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_WHITE),
+                    ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        section_elements.append(t_totals_box)
+        section_elements.append(Spacer(1, 8))
 
         if len(group.entries) <= 6:
-            story.append(KeepTogether(group_elements))
+            story.append(KeepTogether(section_elements))
         else:
-            story.extend(group_elements)
+            story.extend(section_elements)
 
     # =========================================================================
-    # SECTION D: Period Sales Summary
+    # SECTION 2: 2. PERIOD SUMMARY (Light Green Container matching template)
     # =========================================================================
-    story.append(Spacer(1, 6))
     summary_elements: List[Any] = []
-    summary_elements.append(Paragraph("3. PERIOD SALES SUMMARY", style_section_heading))
+    summary_elements.append(Paragraph("<b>2. PERIOD SUMMARY</b>", style_section_title))
 
-    summary_rows = [
-        [Paragraph("Particulars", style_table_header), Paragraph("Amount / Detail", style_table_header_right)],
+    sum_rec_str = f"₹ {sum_recorded_subtotals:,.2f}" if sum_recorded_subtotals is not None else "Not Recorded"
+    written_page_str = (
+        f"₹ {written_page_total:,.2f}"
+        if written_page_total is not None
+        else "Not present"
+    )
+
+    period_box_data = [
+        # Top Row: 3 columns
         [
-            Paragraph("<b>Total Calculated Sales</b> (Sum of individual line items)", style_cell_reg),
-            Paragraph(f"<b>{format_inr(total_calculated_sales)}</b>", style_cell_right_bold),
-        ],
-        [
-            Paragraph("<b>Sum of Recorded Daily Subtotals</b> (Handwritten section subtotals)", style_cell_reg),
             Paragraph(
-                f"<b>{format_inr(sum_recorded_subtotals)}</b>" if sum_recorded_subtotals is not None else "<i>Not Recorded</i>",
-                style_cell_right_bold,
+                f"<font color='#475569' size='7'>Calculated sales total</font><br/><b>₹ {total_calculated_sales:,.2f}</b>",
+                style_val_bold_large,
+            ),
+            Paragraph(
+                f"<font color='#475569' size='7'>Recorded daily subtotals</font><br/><b>{sum_rec_str}</b>",
+                style_val_bold_large,
+            ),
+            Paragraph(
+                f"<font color='#475569' size='7'>Written grand total</font><br/><b>{written_page_str}</b>",
+                style_val_bold,
             ),
         ],
+        # Bottom Row: 2 columns
         [
-            Paragraph("<b>Written Page Grand Total</b> (Handwritten at page bottom)", style_cell_reg),
             Paragraph(
-                f"<b>{format_inr(written_page_total)}</b>" if written_page_total is not None else "<i>Not Recorded</i>",
-                style_cell_right_bold,
+                f"<font color='#475569' size='7'>Amounts not recorded</font><br/><b>{unpriced_count}</b>",
+                style_val_bold,
             ),
-        ],
-        [
-            Paragraph("Total Transactions Recorded", style_cell_reg),
-            Paragraph(str(total_entries_count), style_cell_right),
-        ],
-        [
-            Paragraph("Priced Transactions (Included in calculated sales)", style_cell_reg),
-            Paragraph(str(priced_count), style_cell_right),
-        ],
-        [
-            Paragraph("Unpriced Transactions (Amount Not Recorded — excluded from total)", style_cell_reg),
-            Paragraph(str(unpriced_count), style_cell_right),
-        ],
-        [
-            Paragraph("Pending Confirmation Entries", style_cell_reg),
-            Paragraph(f"<font color='#B45309'><b>{pending_count}</b></font>", style_cell_right),
-        ],
-        [
-            Paragraph("Confirmed Transactions (Human Reviewed)", style_cell_reg),
-            Paragraph(str(confirmed_count), style_cell_right),
+            Paragraph(
+                f"<font color='#475569' size='7'>Pending confirmation</font><br/><b>{pending_count}</b>",
+                style_val_bold,
+            ),
+            "",
         ],
     ]
 
-    t_summary = Table(summary_rows, colWidths=[363.27, 160])
-    t_summary.setStyle(
+    t_period_box = Table(period_box_data, colWidths=[180, 180, 163.27])
+    t_period_box.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#F8FAFC")),
-                ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#FFFFFF")),
-                ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#F8FAFC")),
-                ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+                ("BACKGROUND", (0, 0), (-1, -1), COLOR_BG_LIGHT_GREEN),
+                ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREEN),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    summary_elements.append(t_period_box)
+    summary_elements.append(Spacer(1, 10))
+    story.append(KeepTogether(summary_elements))
+
+    # =========================================================================
+    # SECTION 3: 3. SALES RECONCILIATION
+    # =========================================================================
+    recon_elements: List[Any] = []
+    recon_elements.append(Paragraph("<b>3. SALES RECONCILIATION</b>", style_section_title))
+    recon_elements.append(
+        Paragraph("Reconcile each ledger section separately, including sections sharing a date.", style_section_subtitle)
+    )
+
+    # 4-column Table: Date / Section | Recorded subtotal | Calculated total | Difference
+    recon_data: List[List[Any]] = [
+        [
+            Paragraph("Date / Section", style_table_th_recon),
+            Paragraph("Recorded subtotal", style_table_th_recon_right),
+            Paragraph("Calculated total", style_table_th_recon_right),
+            Paragraph("Difference", style_table_th_recon_right),
+        ]
+    ]
+
+    for s_idx, group in enumerate(extraction.groups):
+        section_label = f"{format_date_ddmmyyyy(group.date_raw, group.date_iso)} / Section {s_idx + 1}"
+        c_sum = calculate_group_sum(group)
+
+        if group.recorded_group_total is not None and str(group.recorded_group_total).strip().lower() not in ("", "null", "none", "-"):
+            r_dec = Decimal(str(group.recorded_group_total))
+            r_str = f"₹ {r_dec:,.2f}"
+            diff_dec = r_dec - c_sum
+            diff_str = f"₹ {diff_dec:,.2f}"
+        else:
+            r_str = "Not Recorded"
+            diff_str = "—"
+
+        recon_data.append([
+            Paragraph(section_label, style_td_reg),
+            Paragraph(r_str, style_td_right),
+            Paragraph(f"₹ {c_sum:,.2f}", style_td_right),
+            Paragraph(diff_str, style_td_right_bold),
+        ])
+
+    t_recon = Table(recon_data, colWidths=[163.27, 120, 120, 120])
+    t_recon.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_BG_LIGHT_BLUE),
+                ("BACKGROUND", (0, 1), (-1, -1), COLOR_BG_WHITE),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDER_GREY),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                 ("LEFTPADDING", (0, 0), (-1, -1), 6),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ]
         )
     )
-    summary_elements.append(t_summary)
-    summary_elements.append(Spacer(1, 6))
-    story.append(KeepTogether(summary_elements))
-
-    # =========================================================================
-    # SECTION E: Sales Reconciliation
-    # =========================================================================
-    recon_elements: List[Any] = []
-    recon_elements.append(Paragraph("4. SALES RECONCILIATION & DISCREPANCY ANALYSIS", style_section_heading))
-    recon_elements.append(
-        Paragraph(
-            "Comparison between handwritten recorded subtotals and dynamically calculated line-item sums. "
-            "Neither handwritten figures nor transaction sums are altered.",
-            style_cell_muted,
-        )
-    )
-    recon_elements.append(Spacer(1, 4))
-
-    recon_rows: List[List[Any]] = [
-        [
-            Paragraph("Section / Date", style_table_header),
-            Paragraph("Recorded Subtotal", style_table_header_right),
-            Paragraph("Calculated Total", style_table_header_right),
-            Paragraph("Difference", style_table_header_right),
-            Paragraph("Reconciliation Status", style_table_header),
-        ]
-    ]
-
-    total_rec_diff = Decimal("0")
-    has_any_subtotals = False
-
-    for s_idx, group in enumerate(extraction.groups):
-        section_label = f"Section {s_idx + 1} ({group.date_raw.replace(chr(10), ' ').strip() if group.date_raw else (group.date_iso or f'Sec {s_idx+1}')})"
-        c_sum = calculate_group_sum(group)
-
-        if group.recorded_group_total is not None and str(group.recorded_group_total).strip().lower() not in ("", "null", "none", "-"):
-            has_any_subtotals = True
-            r_total = Decimal(str(group.recorded_group_total))
-            diff = r_total - c_sum
-            total_rec_diff += diff
-            diff_str = format_inr(diff) if abs(diff) >= Decimal("0.001") else "₹0.00"
-            status_text = (
-                "<font color='#0B5D45'><b>Reconciled (Exact Match)</b></font>"
-                if abs(diff) < Decimal("0.001")
-                else f"<font color='#B45309'><b>Discrepancy: {format_inr(abs(diff))}</b></font>"
-            )
-            r_str = format_inr(r_total)
-        else:
-            r_str = "<i>Not Recorded</i>"
-            diff_str = "—"
-            status_text = "<font color='#64748B'>No handwritten subtotal on document</font>"
-
-        recon_rows.append([
-            Paragraph(section_label, style_cell_reg),
-            Paragraph(r_str, style_cell_right),
-            Paragraph(format_inr(c_sum), style_cell_right),
-            Paragraph(diff_str, style_cell_right_bold),
-            Paragraph(status_text, style_cell_reg),
-        ])
-
-    # Summary Reconciliation row
-    if has_any_subtotals and sum_recorded_subtotals is not None:
-        overall_diff = sum_recorded_subtotals - total_calculated_sales
-        overall_status = (
-            "<font color='#0B5D45'><b>Reconciled</b></font>"
-            if abs(overall_diff) < Decimal("0.001")
-            else f"<font color='#B45309'><b>Net Variance: {format_inr(abs(overall_diff))}</b></font>"
-        )
-        recon_rows.append([
-            Paragraph("<b>Total Across Sections</b>", style_cell_bold),
-            Paragraph(f"<b>{format_inr(sum_recorded_subtotals)}</b>", style_cell_right_bold),
-            Paragraph(f"<b>{format_inr(total_calculated_sales)}</b>", style_cell_right_bold),
-            Paragraph(f"<b>{format_inr(overall_diff)}</b>", style_cell_right_bold),
-            Paragraph(overall_status, style_cell_reg),
-        ])
-
-    t_recon = Table(recon_rows, colWidths=[130, 95, 95, 85, 118.27])
-    t_recon_style = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]
-    if has_any_subtotals:
-        t_recon_style.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#F1F5F9")))
-        t_recon_style.append(("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#94A3B8")))
-
-    t_recon.setStyle(TableStyle(t_recon_style))
     recon_elements.append(t_recon)
-    recon_elements.append(Spacer(1, 6))
-    story.append(KeepTogether(recon_elements))
+    recon_elements.append(Spacer(1, 10))
 
     # =========================================================================
-    # SECTION F: Standard Formal Disclaimer (No AI mentions)
+    # IMPORTANT NOTE (Mandatory Disclaimer matching template)
     # =========================================================================
-    disclaimer_elements: List[Any] = []
-    disclaimer_elements.append(Paragraph("5. NOTES & REGULATORY DISCLAIMER", style_section_heading))
+    recon_elements.append(HRFlowable(width="100%", thickness=0.5, color=COLOR_LIGHT_BORDER, spaceBefore=4, spaceAfter=6))
+    recon_elements.append(Paragraph("<b>IMPORTANT NOTE</b>", style_card_heading))
+    recon_elements.append(Spacer(1, 2))
 
     disclaimer_text = (
-        "This statement is prepared from the business records provided and is intended to organize transaction "
-        "information for reference and supporting documentation. Calculated amounts are derived from the transactions listed. "
+        "Prepared from the business records provided. Calculated amounts are derived from the transactions listed. "
         "Pending confirmations and discrepancies are identified separately. "
         "This statement is not an audited or certified financial statement."
     )
+    recon_elements.append(Paragraph(disclaimer_text, style_disclaimer_text))
 
-    t_disc = Table(
-        [[Paragraph(disclaimer_text, style_disclaimer)]],
-        colWidths=[523.27],
-    )
-    t_disc.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#94A3B8")),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    disclaimer_elements.append(t_disc)
-    story.append(KeepTogether(disclaimer_elements))
+    story.append(KeepTogether(recon_elements))
 
-    # Build PDF with dynamic NumberedCanvas
-    doc.build(story, canvasmaker=NumberedCanvas)
+    # Build document with TemplateCanvas
+    doc.build(story, canvasmaker=TemplateCanvas)
     return buffer.getvalue()

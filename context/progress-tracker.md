@@ -86,19 +86,21 @@ change.
   - Enforced strict review state transition: entries remain `needs_review` when viewed or cancelled; only explicit "Save & Confirm" or "Confirm As-Is" transitions status to `human_reviewed`.
   - Wired real-time recalculation: saving a correction immediately updates date-group calculated totals, page calculated sum, discrepancy comparisons, and overview counts without altering written subtotals.
   - Created automated 13-case test suite (`tests/test_manual_review_flow.js`) verifying all review operations and recalculations against real benchmark ledger data with 100% pass rate.
-- Professional Business Sales Statement PDF for Loan Documentation complete
-  - Redesigned PDF layout from dashboard representation to a formal accountant-prepared Business Sales Statement and Daily Sales Register suitable as supporting documentation for bank loan applications.
-  - Implemented 5 formal document sections:
-    1. Header & Business Information Table: Formal header with preparation date, statement reference number, trade name, business address, nature of business, statement period, and currency (INR / ₹).
-    2. Daily Sales Register: 4-column accountant transaction register (`Date`, `Sr. No.`, `Particulars / Description`, `Amount (₹)`) with native Devanagari typography (`NirmalaUI`), right-aligned amounts, unpriced items explicitly marked as `"Not Recorded"`, and per-section calculated daily totals and handwritten recorded subtotals with variance analysis.
-    3. Period Sales Summary: Tabular overview separating Total Calculated Sales (dynamically calculated) from Sum of Recorded Daily Subtotals and Written Grand Total, along with transparent counts for total, priced, unpriced, pending confirmation, and confirmed transactions.
-    4. Sales Reconciliation & Discrepancy Analysis: Full section-by-section comparison of recorded subtotals against calculated line-item totals with explicit variance reporting.
-    5. Notes & Regulatory Disclaimer: Standard formal disclaimer note without any internal AI/LLM branding.
-  - Neutral Terminology: Replaced dashboard badges with neutral accounting terms (`Recorded`, `Confirmed`, `Pending Confirmation`, `Amount Not Recorded`, `Calculated Daily Total`).
-  - Pagination Optimization: Cleaned margins and spacing so multi-section datasets fit balanced across 2 pages without orphan disclaimer pages.
+- Professional Business Sales Statement PDF for Loan Documentation complete (Template-Perfect)
+  - Redesigned PDF generator to strictly match `ledgerpilot_business_sales_statement_template.png` with pixel-level fidelity.
+  - Implemented exact visual hierarchy from template:
+    1. Top navy bar (`#0A2540`, 3.5 pt) across all pages.
+    2. Header: `BUSINESS SALES STATEMENT` / `Supporting Financial Records` (left) and `INR | ₹` (right).
+    3. Boxed `BUSINESS INFORMATION` card with business name, address, reporting period, and preparation date.
+    4. `1. DAILY SALES REGISTER`: 4-column transaction table (`Date`, `Sr. No.`, `Particulars / Description`, `Amount (₹)`) with dark navy header (`#0A2540`), native Devanagari typography (`NirmalaUI`), date displayed only on the first row of each section and blank on subsequent rows, and missing amounts marked as `"Not Recorded"`.
+    5. Standalone `SECTION {N} TOTALS` outlined box below each section table displaying Transactions count, Calculated total, Handwritten subtotal, and Difference.
+    6. `2. PERIOD SUMMARY`: Soft light-green container box (`#EAF7EE`) featuring Calculated sales total, Recorded daily subtotals, Written grand total, Amounts not recorded count, and Pending confirmation count.
+    7. `3. SALES RECONCILIATION`: 4-column table with soft blue/grey header (`#F1F5F9`) detailing every section separately, including preserving separate sections that share the same date (e.g. `11/11/2019 / Section 1` and `11/11/2019 / Section 2`).
+    8. `IMPORTANT NOTE`: Thin divider line and formal disclaimer note matching template text verbatim.
+    9. Running footer: `BUSINESS SALES STATEMENT • Supporting Financial Records` | `Page X of Y`.
   - Verified benchmark regression against Section 6 scenario (`ledger_02` sample): 3 sections, 24 entries, 23 priced entries, 1 unpriced entry, calculated total ₹2,040, recorded subtotals ₹2,140, difference ₹100, 2 pending confirmations, no written grand total.
-  - Verified 100% pass rate across all test suites: `tests/test_api_reports.py` (5/5 tests), `tests/test_api_extract.py` (7/7 tests), and `tests/test_manual_review_flow.js` (13/13 tests) with zero external Gemini API calls.
-  - Rendered and visually inspected high-resolution PNG pages (`scratch/pdf_renders/`) confirming accountant aesthetic, accurate typography, and proper table alignment.
+  - Verified 100% pass rate across all test suites: `tests/test_api_reports.py` (6/6 tests), `tests/test_api_extract.py` (7/7 tests), and `tests/test_manual_review_flow.js` (13/13 tests) with zero external Gemini API calls.
+  - Rendered and visually inspected high-resolution PNG pages (`scratch/pdf_renders/`) confirming accountant aesthetic, accurate typography, and exact template match.
 
 ## In Progress
 
