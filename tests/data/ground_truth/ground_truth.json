@@ -1,0 +1,579 @@
+{
+  "dataset_description": "Ground truth transcriptions for 3 handwritten Marathi salon ledger images",
+  "currency": "INR",
+  "business_type": "Women's Beauty Parlour / Salon",
+  "language": "mr",
+  "script": "Devanagari",
+  "images": {
+    "ledger_01.png": {
+      "image_path": "tests/data/real_ledgers/ledger_01.png",
+      "original_source": "assests/img/ledger-page.png",
+      "page_layout": "Two date groups stacked vertically (sideways orientation)",
+      "total_entries": 13,
+      "unpriced_entries_count": 1,
+      "arithmetic_discrepancy_count": 1,
+      "groups": [
+        {
+          "group_id": "group_1",
+          "date_raw": "४/११/२०१९ सोमवार",
+          "date_iso": "2019-11-04",
+          "day_of_week": "सोमवार (Monday)",
+          "recorded_group_total": 440.0,
+          "calculated_group_sum": 400.0,
+          "has_arithmetic_discrepancy": true,
+          "discrepancy_notes": "Individual priced entries sum to 400, but shopkeeper recorded 440 (difference of 40). Entry 9 is unpriced.",
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो , यु कट",
+              "amount": 90.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, U Cut"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 6,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 7,
+              "raw_marathi_text": "आयब्रो , मस्ट",
+              "amount": 80.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, Mustache/upper lip"
+            },
+            {
+              "entry_index": 8,
+              "raw_marathi_text": "\" \"",
+              "amount": 80.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Ditto for item 7 (आयब्रो , मस्ट)"
+            },
+            {
+              "entry_index": 9,
+              "raw_marathi_text": "peemnant smoothing",
+              "amount": null,
+              "is_unpriced": true,
+              "is_uncertain": true,
+              "notes": "Permanent smoothing written in English script without price (dash recorded)"
+            }
+          ]
+        },
+        {
+          "group_id": "group_2",
+          "date_raw": "५/११/२०१९ मंगळवार",
+          "date_iso": "2019-11-05",
+          "day_of_week": "मंगळवार (Tuesday)",
+          "recorded_group_total": 230.0,
+          "calculated_group_sum": 230.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "आयब्रो , यु कट , कट",
+              "amount": 140.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, U Cut, Cut"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            }
+          ]
+        }
+      ]
+    },
+    "ledger_02.jpeg": {
+      "image_path": "tests/data/real_ledgers/ledger_02.jpeg",
+      "original_source": "assests/img/WhatsApp Image 2026-11-01 at 09.42.57.jpeg",
+      "page_layout": "Top half single date (10 Nov), bottom half two sections (11 Nov and 12 Nov)",
+      "total_entries": 24,
+      "unpriced_entries_count": 0,
+      "arithmetic_discrepancy_count": 0,
+      "groups": [
+        {
+          "group_id": "group_1",
+          "date_raw": "१०/११/२०१९ रविवार",
+          "date_iso": "2019-11-10",
+          "day_of_week": "रविवार (Sunday)",
+          "recorded_group_total": 780.0,
+          "calculated_group_sum": 780.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "हेअरकट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Haircut"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो , अ",
+              "amount": 40.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, Upper lip / Forehead"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Cut"
+            },
+            {
+              "entry_index": 6,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 7,
+              "raw_marathi_text": "क्लिनअप , हेअरकट",
+              "amount": 250.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Cleanup, Haircut"
+            },
+            {
+              "entry_index": 8,
+              "raw_marathi_text": "हेअरकट , आयब्रो",
+              "amount": 80.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Haircut, Eyebrow"
+            },
+            {
+              "entry_index": 9,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 10,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 11,
+              "raw_marathi_text": "हेअर कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Hair cut"
+            },
+            {
+              "entry_index": 12,
+              "raw_marathi_text": "हेअर कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Hair cut"
+            },
+            {
+              "entry_index": 13,
+              "raw_marathi_text": "आयब्रो - २",
+              "amount": 60.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow - 2 persons"
+            }
+          ]
+        },
+        {
+          "group_id": "group_2",
+          "date_raw": "११/११/२०१९",
+          "date_iso": "2019-11-11",
+          "day_of_week": "सोमवार (Monday)",
+          "recorded_group_total": 1030.0,
+          "calculated_group_sum": 1030.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो - २",
+              "amount": 60.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow - 2 persons"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "आयब्रो , ओ , वॅक्स",
+              "amount": 90.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, Upper lip, Wax"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "फेशियल , आयब्रो",
+              "amount": 500.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Facial, Eyebrow"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "वॅक्स",
+              "amount": 350.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Waxing"
+            }
+          ]
+        },
+        {
+          "group_id": "group_3",
+          "date_raw": "१२/११/२०१९",
+          "date_iso": "2019-11-12",
+          "day_of_week": "मंगळवार (Tuesday)",
+          "recorded_group_total": 330.0,
+          "calculated_group_sum": 330.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "यु कट",
+              "amount": 60.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "U Cut"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Cut"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो , अ.",
+              "amount": 40.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, Upper lip / Forehead"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "हेअरकट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Haircut"
+            },
+            {
+              "entry_index": 6,
+              "raw_marathi_text": "\" , आयब्रो - २",
+              "amount": 100.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Haircut ditto + 2 Eyebrows"
+            }
+          ]
+        }
+      ]
+    },
+    "ledger_03.jpeg": {
+      "image_path": "tests/data/real_ledgers/ledger_03.jpeg",
+      "original_source": "assests/img/WhatsApp Image 2026-11-01 at 09.42.58.jpeg",
+      "page_layout": "Four quadrants across 2 page halves (top-right, top-left, bottom-right, bottom-left)",
+      "total_entries": 17,
+      "unpriced_entries_count": 0,
+      "arithmetic_discrepancy_count": 0,
+      "groups": [
+        {
+          "group_id": "group_1",
+          "date_raw": "६/११/२०१९ बुधवार",
+          "date_iso": "2019-11-06",
+          "day_of_week": "बुधवार (Wednesday)",
+          "recorded_group_total": 140.0,
+          "calculated_group_sum": 140.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "हेअरकट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Haircut"
+            }
+          ]
+        },
+        {
+          "group_id": "group_2",
+          "date_raw": "७/११/२०१९ गुरुवार",
+          "date_iso": "2019-11-07",
+          "day_of_week": "गुरुवार (Thursday)",
+          "recorded_group_total": null,
+          "calculated_group_sum": 570.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": "No subtotal was written down by the shopkeeper for this section.",
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "\" फो",
+              "amount": 40.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow forehead"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "आयब्रो - २",
+              "amount": 60.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow - 2 persons"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "\" - हेअरकट",
+              "amount": 180.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Ditto - Haircut"
+            },
+            {
+              "entry_index": 6,
+              "raw_marathi_text": "\" \"",
+              "amount": 150.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Ditto services"
+            },
+            {
+              "entry_index": 7,
+              "raw_marathi_text": "\" \"",
+              "amount": 80.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Ditto services"
+            }
+          ]
+        },
+        {
+          "group_id": "group_3",
+          "date_raw": "८/११/२०१९ शुक्रवार",
+          "date_iso": "2019-11-08",
+          "day_of_week": "शुक्रवार (Friday)",
+          "recorded_group_total": 590.0,
+          "calculated_group_sum": 590.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 2,
+              "raw_marathi_text": "कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Cut"
+            },
+            {
+              "entry_index": 3,
+              "raw_marathi_text": "कट",
+              "amount": 50.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Cut"
+            },
+            {
+              "entry_index": 4,
+              "raw_marathi_text": "आयब्रो",
+              "amount": 30.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow"
+            },
+            {
+              "entry_index": 5,
+              "raw_marathi_text": "आयब्रो , हेअर कट , वॅक्स",
+              "amount": 430.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Eyebrow, Hair Cut, Wax"
+            }
+          ]
+        },
+        {
+          "group_id": "group_4",
+          "date_raw": "९/११/२०१९ शनिवार",
+          "date_iso": "2019-11-09",
+          "day_of_week": "शनिवार (Saturday)",
+          "recorded_group_total": null,
+          "calculated_group_sum": 670.0,
+          "has_arithmetic_discrepancy": false,
+          "discrepancy_notes": null,
+          "entries": [
+            {
+              "entry_index": 1,
+              "raw_marathi_text": "फेशियल , वॅक्स , आयब्रो",
+              "amount": 670.0,
+              "is_unpriced": false,
+              "is_uncertain": false,
+              "notes": "Facial, Wax, Eyebrow"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

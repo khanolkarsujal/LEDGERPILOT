@@ -1,0 +1,12 @@
+# LedgerPilot backend dependencies
+# Matches the approved architecture in architecture.md
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.32,<1.0
+python-multipart>=0.0.12    # Required by FastAPI for file uploads
+python-dotenv>=1.0,<2.0     # Load .env for API keys
+pillow>=11.0,<12.0           # Image resize, orient, compress
+pandas>=2.2,<3.0             # DataFrame operations for reports
+openpyxl>=3.1,<4.0           # Excel export
+pydantic>=2.9,<3.0           # Request/response models (bundled with FastAPI)
+google-genai>=1.0.0          # Google Gemini GenAI SDK

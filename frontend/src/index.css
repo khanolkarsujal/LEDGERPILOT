@@ -1,0 +1,64 @@
+/* ===================================================================
+   LedgerPilot — Design Tokens & Global Styles
+   All values sourced from ui-context.md.  Components reference these
+   custom properties — no hardcoded hex values anywhere.
+   =================================================================== */
+
+:root {
+  /* ── Colors ── */
+  --bg-base: #F7F5EF;
+  --bg-surface: #FFFFFF;
+  --text-primary: #1A2B24;
+  --text-muted: #5B6B64;
+  --accent-primary: #0B5D45;
+  --accent-secondary: #F5B829;
+  --border-default: #D9D6CB;
+  --state-error: #B42318;
+  --state-success: #1A7F4B;
+  --state-flag: #B54708;
+  --state-flag-bg: #FFF4D6;
+
+  /* ── Typography ── */
+  --font-sans: 'Noto Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* ── Border Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* ── Reset & Base ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 100%; /* 16px base — minimum per ui-context.md */
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numbers for amounts and dates so columns align */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Minimum tap target for accessibility (44px per ui-context.md) */
+button,
+[role="button"],
+input[type="file"] {
+  min-height: 44px;
+  min-width: 44px;
+}

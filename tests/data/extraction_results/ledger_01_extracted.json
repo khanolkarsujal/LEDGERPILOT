@@ -1,0 +1,139 @@
+{
+  "page_summary": "Two-section ledger notebook page for a beauty parlour/salon. Entries are written in Marathi with service descriptions (eyebrows, hair cut, etc.) and numerical amounts in English digits. The top section covers 04/11/2019 (Monday) and the bottom section covers 05/11/2019 (Tuesday). Faint erased pencil markings and impressions are visible in the background.",
+  "groups": [
+    {
+      "group_id": "group_1",
+      "date_raw": "४।११।२०१९\nसोमवार",
+      "date_iso": "2019-11-04",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "① आयब्रो , यु कट",
+          "amount": "90",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "② आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "③ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "④ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "⑤ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 6,
+          "raw_marathi_text": "⑥ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 7,
+          "raw_marathi_text": "⑦ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 8,
+          "raw_marathi_text": "⑧ आयब्रो, मस्क",
+          "amount": "80",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 9,
+          "raw_marathi_text": "⑨ \" \" \"",
+          "amount": "80",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 10,
+          "raw_marathi_text": "① peemnant Smoothing",
+          "amount": null,
+          "entry_type": "unknown",
+          "uncertain_fields": [
+            "amount"
+          ],
+          "flag_reason": "No amount specified on this line"
+        }
+      ],
+      "recorded_group_total": "440",
+      "notes": "Includes Swastika symbol at top. Subtotal of 440 is written under 'टोटल'."
+    },
+    {
+      "group_id": "group_2",
+      "date_raw": "५।११।२०१९\nमंगळवार",
+      "date_iso": "2019-11-05",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "① आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "② आयब्रो, यु कट, कट",
+          "amount": "140",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "③ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "④ आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "230",
+      "notes": "Subtotal of 230 written directly below entry ④."
+    }
+  ],
+  "recorded_page_total": null,
+  "unreadable_sections_found": true
+}

@@ -1,0 +1,179 @@
+{
+  "page_summary": "Two-page open ledger notebook spread with four separate date-wise daily entry sections, handwritten in Marathi and English numerals for parlor/beauty services.",
+  "groups": [
+    {
+      "group_id": "group_1",
+      "date_raw": "६/११/२०१९ बुधवार",
+      "date_iso": "2019-11-06",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "१) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "२) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "३) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "४) हेअरकट",
+          "amount": "50",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "140",
+      "notes": "Group total explicitly written below the entries."
+    },
+    {
+      "group_id": "group_2",
+      "date_raw": "७/११/२०१९ गुरुवार",
+      "date_iso": "2019-11-07",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "१) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "२) \" फो",
+          "amount": "40",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "३) आयब्रो-२",
+          "amount": "60",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "४) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "५) \" - हेअरकट",
+          "amount": "180",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 6,
+          "raw_marathi_text": "६) \" \"",
+          "amount": "150",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 7,
+          "raw_marathi_text": "७) \" \"",
+          "amount": "80",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": null,
+      "notes": "No subtotal written for this date."
+    },
+    {
+      "group_id": "group_3",
+      "date_raw": "८/११/२०१९ शुक्रवार",
+      "date_iso": "2019-11-08",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "१) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "२) कट",
+          "amount": "50",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "३) कट",
+          "amount": "50",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "४) आयब्रो",
+          "amount": "30",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "५) आयब्रो, हेअर कट, वॅक्स",
+          "amount": "430",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "590",
+      "notes": "Recorded group total of 590 is boxed."
+    },
+    {
+      "group_id": "group_4",
+      "date_raw": "९/११/२०१९",
+      "date_iso": "2019-11-09",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "१) फेशियल, वॅक्स, आयब्रो",
+          "amount": "670",
+          "entry_type": "unknown",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": null,
+      "notes": "Single entry recorded under date header."
+    }
+  ],
+  "recorded_page_total": null,
+  "unreadable_sections_found": false
+}

@@ -1,0 +1,226 @@
+{
+  "page_summary": "Handwritten ledger (beauty parlour / salon services) across two notebook pages/sections in Marathi. The top section is dated 10/11/2019 (रविवार), and the bottom page contains two dated sections (11/11/2019 and 12/11/2019), each with itemized service entries, amounts, and boxed group totals.",
+  "groups": [
+    {
+      "group_id": "group_1_10_11_2019",
+      "date_raw": "१०/११/२०१९",
+      "date_iso": "2019-11-10",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "20",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "हेअरकट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "आयब्रो, अ",
+          "amount": "40",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "30",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "कट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 6,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "20",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 7,
+          "raw_marathi_text": "क्लिनअप, हेअरकट",
+          "amount": "250",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 8,
+          "raw_marathi_text": "हेअरकट, आयब्रो",
+          "amount": "80",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 9,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "20",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 10,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "20",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 11,
+          "raw_marathi_text": "हेअर कट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 12,
+          "raw_marathi_text": "हेअर कट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 13,
+          "raw_marathi_text": "आयब्रो - २",
+          "amount": "60",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "780",
+      "notes": "Header contains '१०/११/२०१९ रविवार' along the margin; total 780 is boxed at the bottom."
+    },
+    {
+      "group_id": "group_2_11_11_2019",
+      "date_raw": "११/११/२०१९",
+      "date_iso": "2019-11-11",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "आयब्रो - २",
+          "amount": "60",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "आयब्रो, ओ, वॅक्स",
+          "amount": "90",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "30",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "फेशियल, आयब्रो",
+          "amount": "500",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "वॅक्स",
+          "amount": "350",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "1030",
+      "notes": "Dated ११/११/२०१९ on the margin; subtotal 1030 is boxed."
+    },
+    {
+      "group_id": "group_3_12_11_2019",
+      "date_raw": "१२/११/२०१९",
+      "date_iso": "2019-11-12",
+      "entries": [
+        {
+          "entry_index": 1,
+          "raw_marathi_text": "आयब्रो",
+          "amount": "30",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 2,
+          "raw_marathi_text": "यु कट",
+          "amount": "60",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 3,
+          "raw_marathi_text": "कट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 4,
+          "raw_marathi_text": "आयब्रो, अ.",
+          "amount": "40",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 5,
+          "raw_marathi_text": "हेअरकट",
+          "amount": "50",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        },
+        {
+          "entry_index": 6,
+          "raw_marathi_text": "\" , आयब्रो - २",
+          "amount": "100",
+          "entry_type": "income",
+          "uncertain_fields": [],
+          "flag_reason": null
+        }
+      ],
+      "recorded_group_total": "330",
+      "notes": "Dated १२/११/२०१९ on margin near boxed total 330."
+    }
+  ],
+  "recorded_page_total": null,
+  "unreadable_sections_found": false
+}

@@ -1,0 +1,149 @@
+{
+  "total_images": 3,
+  "total_gt_groups": 9,
+  "matched_groups": 9,
+  "dates_correct": 9,
+  "recorded_totals_expected": 7,
+  "recorded_totals_matched": 7,
+  "total_gt_entries": 54,
+  "total_extracted_entries": 55,
+  "amounts_matched": 50,
+  "unpriced_flagged_correctly": 1,
+  "image_results": {
+    "ledger_01.png": {
+      "gt_groups_count": 2,
+      "extracted_groups_count": 2,
+      "gt_entries_count": 13,
+      "extracted_entries_count": 14,
+      "group_evaluations": [
+        {
+          "gt_group_id": "group_1",
+          "gt_date_raw": "४/११/२०१९ सोमवार",
+          "gt_date_iso": "2019-11-04",
+          "gt_recorded_total": 440.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-04",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 9,
+          "entries_total": 9
+        },
+        {
+          "gt_group_id": "group_2",
+          "gt_date_raw": "५/११/२०१९ मंगळवार",
+          "gt_date_iso": "2019-11-05",
+          "gt_recorded_total": 230.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-05",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 4,
+          "entries_total": 4
+        }
+      ]
+    },
+    "ledger_02.jpeg": {
+      "gt_groups_count": 3,
+      "extracted_groups_count": 3,
+      "gt_entries_count": 24,
+      "extracted_entries_count": 24,
+      "group_evaluations": [
+        {
+          "gt_group_id": "group_1",
+          "gt_date_raw": "१०/११/२०१९ रविवार",
+          "gt_date_iso": "2019-11-10",
+          "gt_recorded_total": 780.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-10",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 9,
+          "entries_total": 13
+        },
+        {
+          "gt_group_id": "group_2",
+          "gt_date_raw": "११/११/२०१९",
+          "gt_date_iso": "2019-11-11",
+          "gt_recorded_total": 1030.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-11",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 5,
+          "entries_total": 5
+        },
+        {
+          "gt_group_id": "group_3",
+          "gt_date_raw": "१२/११/२०१९",
+          "gt_date_iso": "2019-11-12",
+          "gt_recorded_total": 330.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-12",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 6,
+          "entries_total": 6
+        }
+      ]
+    },
+    "ledger_03.jpeg": {
+      "gt_groups_count": 4,
+      "extracted_groups_count": 4,
+      "gt_entries_count": 17,
+      "extracted_entries_count": 17,
+      "group_evaluations": [
+        {
+          "gt_group_id": "group_1",
+          "gt_date_raw": "६/११/२०१९ बुधवार",
+          "gt_date_iso": "2019-11-06",
+          "gt_recorded_total": 140.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-06",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 4,
+          "entries_total": 4
+        },
+        {
+          "gt_group_id": "group_2",
+          "gt_date_raw": "७/११/२०१९ गुरुवार",
+          "gt_date_iso": "2019-11-07",
+          "gt_recorded_total": null,
+          "matched": true,
+          "extracted_date_iso": "2019-11-07",
+          "date_match": true,
+          "recorded_total_match": false,
+          "entries_matched": 7,
+          "entries_total": 7
+        },
+        {
+          "gt_group_id": "group_3",
+          "gt_date_raw": "८/११/२०१९ शुक्रवार",
+          "gt_date_iso": "2019-11-08",
+          "gt_recorded_total": 590.0,
+          "matched": true,
+          "extracted_date_iso": "2019-11-08",
+          "date_match": true,
+          "recorded_total_match": true,
+          "entries_matched": 5,
+          "entries_total": 5
+        },
+        {
+          "gt_group_id": "group_4",
+          "gt_date_raw": "९/११/२०१९ शनिवार",
+          "gt_date_iso": "2019-11-09",
+          "gt_recorded_total": null,
+          "matched": true,
+          "extracted_date_iso": "2019-11-09",
+          "date_match": true,
+          "recorded_total_match": false,
+          "entries_matched": 1,
+          "entries_total": 1
+        }
+      ]
+    }
+  },
+  "entry_amount_accuracy_pct": 92.59,
+  "date_accuracy_pct": 100.0,
+  "recorded_totals_accuracy_pct": 100.0
+}
