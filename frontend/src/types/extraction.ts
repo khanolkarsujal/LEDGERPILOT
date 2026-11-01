@@ -69,4 +69,5 @@ export interface JobStatusResponse {
   elapsed_time_s: number;
   result: LedgerPageExtraction | null;
   error: string | null;
+  error_code?: string | null;
 }

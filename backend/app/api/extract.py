@@ -19,7 +19,12 @@ from pydantic import BaseModel
 from PIL import Image, ImageOps
 from starlette.concurrency import run_in_threadpool
 
-from app.extraction.gemini_extractor import extract_ledger_page
+from app.extraction.gemini_extractor import (
+    DAILY_QUOTA_USER_MESSAGE,
+    QUOTA_ERROR_CODE,
+    GeminiQuotaExhaustedError,
+    extract_ledger_page,
+)
 from app.schemas.ledger import LedgerPageExtraction
 
 router = APIRouter(prefix="/api", tags=["Extraction"])
@@ -58,6 +63,7 @@ class JobStatusResponse(BaseModel):
     elapsed_time_s: float
     result: Optional[LedgerPageExtraction] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
 
 
 # In-memory job registry for real-time progress tracking
@@ -95,12 +101,21 @@ def _process_job_worker(job_id: str, image_bytes: bytes) -> None:
         image = Image.open(io.BytesIO(image_bytes))
         image = ImageOps.exif_transpose(image)
         extraction = extract_ledger_page(image, on_stage_change=on_stage)
-        
+
         job = JOBS.get(job_id)
         if job:
             job["result"] = extraction
             job["status"] = "completed"
             job["completed_at"] = time.time()
+    except GeminiQuotaExhaustedError as e:
+        job = JOBS.get(job_id)
+        if job:
+            # Fail only this job. Previously completed jobs in JOBS stay intact.
+            job["status"] = "failed"
+            job["error"] = str(e) or DAILY_QUOTA_USER_MESSAGE
+            job["error_code"] = getattr(e, "error_code", None) or QUOTA_ERROR_CODE
+            job["completed_at"] = time.time()
+            _record_event(job_id, ProcessingStage.FAILED, str(e) or DAILY_QUOTA_USER_MESSAGE)
     except Exception as e:
         job = JOBS.get(job_id)
         if job:
@@ -189,6 +204,7 @@ async def create_extraction_job(
         "completed_at": None,
         "result": None,
         "error": None,
+        "error_code": None,
     }
     JOBS[job_id] = job_entry
 
@@ -206,6 +222,7 @@ async def create_extraction_job(
         elapsed_time_s=0.0,
         result=None,
         error=None,
+        error_code=None,
     )
 
 
@@ -240,6 +257,7 @@ def get_job_status(job_id: str) -> JobStatusResponse:
         elapsed_time_s=elapsed,
         result=job["result"],
         error=job["error"],
+        error_code=job.get("error_code"),
     )
 
 
@@ -301,6 +319,11 @@ async def extract_ledger(
     try:
         extraction = await run_in_threadpool(extract_ledger_page, image)
         return extraction
+    except GeminiQuotaExhaustedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e) or DAILY_QUOTA_USER_MESSAGE,
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

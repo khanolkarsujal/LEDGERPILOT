@@ -1,13 +1,33 @@
 import type { JobStatusResponse, LedgerPageExtraction } from '../types/extraction';
 
+export const GEMINI_DAILY_QUOTA_ERROR_CODE = 'gemini_daily_quota_exhausted';
+
 export class ExtractionApiError extends Error {
   statusCode: number;
+  errorCode?: string | null;
 
-  constructor(message: string, statusCode: number) {
+  constructor(message: string, statusCode: number, errorCode?: string | null) {
     super(message);
     this.name = 'ExtractionApiError';
     this.statusCode = statusCode;
+    this.errorCode = errorCode;
   }
+}
+
+export function isGeminiDailyQuotaError(
+  error: unknown,
+  message?: string | null,
+  errorCode?: string | null
+): boolean {
+  const code =
+    errorCode ||
+    (error instanceof ExtractionApiError ? error.errorCode : null) ||
+    '';
+  if (code === GEMINI_DAILY_QUOTA_ERROR_CODE) {
+    return true;
+  }
+  const text = `${message || ''} ${error instanceof Error ? error.message : ''}`.toLowerCase();
+  return text.includes('daily gemini quota');
 }
 
 /**
@@ -98,9 +118,11 @@ export async function pollExtractionJob(
     }
 
     if (job.status === 'failed') {
+      const isQuota = job.error_code === GEMINI_DAILY_QUOTA_ERROR_CODE;
       throw new ExtractionApiError(
         job.error || 'Extraction failed on the backend without specific error details.',
-        500
+        isQuota ? 429 : 500,
+        job.error_code
       );
     }
 

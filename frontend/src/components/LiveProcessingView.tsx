@@ -10,6 +10,7 @@ import {
   Server,
   Layers,
 } from 'lucide-react';
+import { isGeminiDailyQuotaError } from '../api';
 import type { JobStatusResponse, ProcessingStage, JobEvent } from '../types/extraction';
 import './LiveProcessingView.css';
 
@@ -100,6 +101,17 @@ export function LiveProcessingView({
   const currentStage: ProcessingStage = job?.current_stage || 'upload_received';
   const currentStageIndex = STAGE_ORDER[currentStage] ?? 0;
   const isFailed = job?.status === 'failed' || !!errorMessage;
+  const isDailyQuota = isGeminiDailyQuotaError(
+    errorMessage,
+    errorMessage || job?.error,
+    job?.error_code
+  );
+  const displayedError =
+    errorMessage ||
+    job?.error ||
+    (isDailyQuota
+      ? 'The daily Gemini quota has been reached. Existing extraction results have been preserved.'
+      : 'Unknown extraction error');
 
   return (
     <div className="live-processing" aria-live="polite">
@@ -123,9 +135,13 @@ export function LiveProcessingView({
             <div className="live-processing__title-wrap live-processing__title-wrap--failed">
               <AlertTriangle size={28} className="live-processing__icon-alert" aria-hidden="true" />
               <div>
-                <h2 className="live-processing__title">Extraction Failed</h2>
+                <h2 className="live-processing__title">
+                  {isDailyQuota ? 'Daily Gemini quota reached' : 'Extraction Failed'}
+                </h2>
                 <p className="live-processing__subtitle">
-                  The backend encountered an error while processing this ledger photograph.
+                  {isDailyQuota
+                    ? 'The daily Gemini quota has been reached. Existing extraction results have been preserved.'
+                    : 'The backend encountered an error while processing this ledger photograph.'}
                 </p>
               </div>
             </div>
@@ -276,17 +292,17 @@ export function LiveProcessingView({
                   <AlertTriangle size={18} aria-hidden="true" />
                   <strong>Backend Error Details</strong>
                 </div>
-                <p className="live-processing__error-text">
-                  {errorMessage || job?.error || 'Unknown extraction error'}
-                </p>
+                <p className="live-processing__error-text">{displayedError}</p>
                 <div className="live-processing__error-actions">
-                  <button
-                    type="button"
-                    className="live-processing__btn live-processing__btn--retry"
-                    onClick={onRetry}
-                  >
-                    <span>Try Again</span>
-                  </button>
+                  {!isDailyQuota && (
+                    <button
+                      type="button"
+                      className="live-processing__btn live-processing__btn--retry"
+                      onClick={onRetry}
+                    >
+                      <span>Try Again</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="live-processing__btn live-processing__btn--cancel"
