@@ -39,9 +39,9 @@ class LedgerEntry(BaseModel):
         default=None,
         description="Short reason if any field is uncertain or flagged for human review (e.g. 'amount digit smudged', 'unreadable Marathi character').",
     )
-    review_status: Optional[Literal["ai_extracted", "needs_review", "human_reviewed"]] = Field(
+    review_status: Optional[Literal["ai_extracted", "needs_review", "human_reviewed", "auto_accepted"]] = Field(
         default=None,
-        description="Review status: 'ai_extracted', 'needs_review', or 'human_reviewed'.",
+        description="Review status: 'ai_extracted', 'needs_review', 'human_reviewed', or 'auto_accepted'.",
     )
     corrected_marathi_text: Optional[str] = Field(
         default=None,

@@ -10,8 +10,6 @@ import {
   Image as ImageIcon,
   Maximize2,
   Minimize2,
-  Tag,
-  Sparkles,
   Calculator,
   Info,
   Pencil,
@@ -20,8 +18,9 @@ import {
   Trash2,
   X,
   AlertCircle,
-  ShieldAlert,
   Check,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import type {
   LedgerPageExtraction,
@@ -42,6 +41,8 @@ interface ExtractionResultViewProps {
   onReset: () => void;
   onUpdateExtraction?: (updated: LedgerPageExtraction) => void;
 }
+
+const LOCAL_STORAGE_BIZ_KEY = 'ledgerpilot_business_details';
 
 /**
  * Returns the effective Marathi description:
@@ -130,23 +131,47 @@ export function isEntryUnpriced(entry: ExtractedLedgerEntry): boolean {
  * Checks if an entry was originally flagged for review by the AI.
  */
 export function isEntryFlagged(entry: ExtractedLedgerEntry): boolean {
-  return entry.uncertain_fields.length > 0 || Boolean(entry.flag_reason);
+  return (entry.uncertain_fields && entry.uncertain_fields.length > 0) || Boolean(entry.flag_reason);
+}
+
+/**
+ * Checks if an extracted entry has high confidence:
+ * - Has non-empty description.
+ * - Has valid numeric amount > 0.
+ * - Has zero uncertainty flags and zero flag reasons.
+ */
+export function isEntryHighConfidence(entry: ExtractedLedgerEntry): boolean {
+  const desc = getEffectiveDescription(entry);
+  const amt = getEffectiveAmount(entry);
+  const unpriced = isEntryUnpriced(entry);
+
+  const hasDesc = Boolean(desc && desc.trim());
+  const hasAmt = !unpriced && amt !== null && amt !== undefined && !isNaN(Number(amt)) && Number(amt) > 0;
+  const hasNoFlags = !isEntryFlagged(entry);
+
+  return hasDesc && hasAmt && hasNoFlags;
 }
 
 /**
  * Returns the effective review status of an entry:
  * - 'human_reviewed' if explicitly confirmed/corrected by user
- * - 'needs_review' if flagged by AI and not yet confirmed by user
- * - 'ai_extracted' if not flagged and not yet confirmed
+ * - 'needs_review' if flagged by AI or unpriced without human confirmation
+ * - 'auto_accepted' if high confidence (clean description, clean amount, zero flags)
  */
 export function getEntryStatus(entry: ExtractedLedgerEntry): ReviewStatus {
   if (entry.review_status === 'human_reviewed') {
     return 'human_reviewed';
   }
-  if (isEntryFlagged(entry)) {
+  if (entry.review_status === 'auto_accepted') {
+    return 'auto_accepted';
+  }
+  if (isEntryFlagged(entry) || isEntryUnpriced(entry)) {
     return 'needs_review';
   }
-  return 'ai_extracted';
+  if (isEntryHighConfidence(entry)) {
+    return 'auto_accepted';
+  }
+  return 'needs_review';
 }
 
 /**
@@ -167,14 +192,14 @@ export function ExtractionResultView({
   onReset,
   onUpdateExtraction,
 }: ExtractionResultViewProps) {
-  // Local state holding the extraction data so human edits update instantly
+  // Local state holding the extraction data so human edits and deletions update instantly
   const [currentExtraction, setCurrentExtraction] = useState<LedgerPageExtraction>(extraction);
   const [activeTab, setActiveTab] = useState<'records' | 'events'>('records');
   const [isImageExpanded, setIsImageExpanded] = useState<boolean>(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  // Active entry being reviewed in modal
+  // Active entry being reviewed/edited in modal
   const [activeReviewCoords, setActiveReviewCoords] = useState<{
     groupIndex: number;
     entryIndex: number;
@@ -185,6 +210,40 @@ export function ExtractionResultView({
     groupIndex: number;
     entryIndex: number;
   } | null>(null);
+
+  // Business Information Collection & Persistence
+  const [businessName, setBusinessName] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_BIZ_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.businessName || '';
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  });
+
+  const [businessAddress, setBusinessAddress] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_BIZ_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.businessAddress || '';
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  });
+
+  const [rememberBusinessDetails, setRememberBusinessDetails] = useState<boolean>(true);
+  const [showBusinessInfoModal, setShowBusinessInfoModal] = useState<boolean>(false);
+
+  // Temp form state for business info modal
+  const [tempBizName, setTempBizName] = useState<string>(businessName);
+  const [tempBizAddress, setTempBizAddress] = useState<string>(businessAddress);
 
   // Discrepancy Acknowledgment Modal state
   const [showDiscrepancyModal, setShowDiscrepancyModal] = useState<boolean>(false);
@@ -202,8 +261,14 @@ export function ExtractionResultView({
     (acc, g) => acc + g.entries.filter(isEntryUnpriced).length,
     0
   );
+
+  // High-confidence entries are automatically accepted; only genuinely uncertain entries require review!
   const needsReviewCount = currentExtraction.groups.reduce(
     (acc, g) => acc + g.entries.filter((e) => getEntryStatus(e) === 'needs_review').length,
+    0
+  );
+  const autoAcceptedCount = currentExtraction.groups.reduce(
+    (acc, g) => acc + g.entries.filter((e) => getEntryStatus(e) === 'auto_accepted').length,
     0
   );
   const humanReviewedCount = currentExtraction.groups.reduce(
@@ -211,9 +276,8 @@ export function ExtractionResultView({
     0
   );
 
-  // Mandatory Review Gate: PDF is blocked if ANY transaction remains unreviewed
-  const unreviewedCount = totalEntries - humanReviewedCount;
-  const isExportBlocked = unreviewedCount > 0 || totalEntries === 0;
+  // Review Gate: PDF is blocked ONLY if there are unresolved flagged entries
+  const isExportBlocked = needsReviewCount > 0 || totalEntries === 0;
 
   // Page-level financial totals distinction
   // 1. Sum of all individual priced entries (using effective amounts)
@@ -298,7 +362,7 @@ export function ExtractionResultView({
         `Section ${entryToDelete.groupIndex + 1}`
       : '';
 
-  // Handler: Save corrections made by human reviewer
+  // Handler: Save corrections made by user
   const handleSaveCorrection = (correction: {
     corrected_marathi_text: string | null;
     corrected_amount: string | number | null;
@@ -337,7 +401,7 @@ export function ExtractionResultView({
     setPdfError(null);
   };
 
-  // Handler: Confirm AI extraction is already correct without changing values
+  // Handler: Confirm an entry as accurate as-is
   const handleConfirmAsIs = () => {
     if (!activeReviewCoords) return;
     const { groupIndex, entryIndex } = activeReviewCoords;
@@ -356,7 +420,7 @@ export function ExtractionResultView({
           corrected_marathi_text: entry.raw_marathi_text,
           corrected_amount: entry.amount,
           reviewed_at: new Date().toISOString(),
-          review_note: 'Confirmed existing AI transcription as accurate',
+          review_note: 'Confirmed transcription as accurate',
         };
       });
 
@@ -374,45 +438,13 @@ export function ExtractionResultView({
     setPdfError(null);
   };
 
-  // Handler: Quick action to confirm all clean (unflagged, priced) entries in one click
-  const handleConfirmAllCleanEntries = () => {
-    const updatedGroups = currentExtraction.groups.map((group) => {
-      const updatedEntries = group.entries.map((entry) => {
-        // If already reviewed, keep it
-        if (entry.review_status === 'human_reviewed') return entry;
-        // If flagged or unpriced, require individual human review
-        if (isEntryFlagged(entry) || isEntryUnpriced(entry)) return entry;
-
-        // Clean entry: mark as human_reviewed with existing values
-        return {
-          ...entry,
-          review_status: 'human_reviewed' as ReviewStatus,
-          corrected_marathi_text: entry.raw_marathi_text,
-          corrected_amount: entry.amount,
-          reviewed_at: new Date().toISOString(),
-          review_note: 'Verified clean entry during review pass',
-        };
-      });
-      return { ...group, entries: updatedEntries };
-    });
-
-    const updatedExtraction: LedgerPageExtraction = {
-      ...currentExtraction,
-      groups: updatedGroups,
-    };
-
-    setCurrentExtraction(updatedExtraction);
-    onUpdateExtraction?.(updatedExtraction);
-    setPdfError(null);
-  };
-
-  // Handler: Find and review next unconfirmed entry
-  const handleReviewNextUnconfirmed = () => {
+  // Handler: Find and review next unresolved flagged entry
+  const handleReviewNextFlagged = () => {
     for (let gIdx = 0; gIdx < currentExtraction.groups.length; gIdx++) {
       const group = currentExtraction.groups[gIdx];
       for (let eIdx = 0; eIdx < group.entries.length; eIdx++) {
         const entry = group.entries[eIdx];
-        if (getEntryStatus(entry) !== 'human_reviewed') {
+        if (getEntryStatus(entry) === 'needs_review') {
           setActiveReviewCoords({ groupIndex: gIdx, entryIndex: eIdx });
           return;
         }
@@ -454,14 +486,14 @@ export function ExtractionResultView({
   };
 
   // Handler: Initiate download of PDF statement
-  const executeDownload = async (acknowledged: boolean) => {
+  const executeDownload = async (bizName: string, bizAddr: string, acknowledged: boolean) => {
     try {
       setIsGeneratingPdf(true);
       setPdfError(null);
       const blob = await downloadPDFReport(
         currentExtraction,
-        undefined,
-        undefined,
+        bizName.trim() || undefined,
+        bizAddr.trim() || undefined,
         undefined,
         undefined,
         acknowledged
@@ -476,6 +508,7 @@ export function ExtractionResultView({
       link.remove();
       window.URL.revokeObjectURL(url);
       setShowDiscrepancyModal(false);
+      setShowBusinessInfoModal(false);
     } catch (err: unknown) {
       if (err instanceof ReportApiError && err.errorData?.error === 'discrepancy_not_acknowledged') {
         setShowDiscrepancyModal(true);
@@ -488,11 +521,20 @@ export function ExtractionResultView({
     }
   };
 
+  // Click handler for PDF generation button
   const handleDownloadPdfClick = () => {
     if (isExportBlocked) {
       setPdfError(
-        `Mandatory Review Gate: ${unreviewedCount} transaction(s) have not been reviewed. Every transaction must be confirmed or deleted before generating the statement.`
+        `Step 2 Review Required: ${needsReviewCount} transaction(s) have unresolved issues. Please review, edit, or delete them before generating the statement.`
       );
+      return;
+    }
+
+    // If business details are missing, prompt user to enter them
+    if (!businessName.trim() && !businessAddress.trim()) {
+      setTempBizName(businessName);
+      setTempBizAddress(businessAddress);
+      setShowBusinessInfoModal(true);
       return;
     }
 
@@ -501,12 +543,48 @@ export function ExtractionResultView({
       return;
     }
 
-    executeDownload(hasAcknowledgedDiscrepancies);
+    executeDownload(businessName, businessAddress, hasAcknowledgedDiscrepancies);
+  };
+
+  // Handler when business info modal is saved
+  const handleSaveBusinessInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalName = tempBizName.trim();
+    const finalAddr = tempBizAddress.trim();
+
+    setBusinessName(finalName);
+    setBusinessAddress(finalAddr);
+
+    if (rememberBusinessDetails) {
+      try {
+        localStorage.setItem(
+          LOCAL_STORAGE_BIZ_KEY,
+          JSON.stringify({ businessName: finalName, businessAddress: finalAddr })
+        );
+      } catch {
+        // ignore
+      }
+    } else {
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_BIZ_KEY);
+      } catch {
+        // ignore
+      }
+    }
+
+    setShowBusinessInfoModal(false);
+
+    if (hasAnyDiscrepancies && !hasAcknowledgedDiscrepancies) {
+      setShowDiscrepancyModal(true);
+      return;
+    }
+
+    executeDownload(finalName, finalAddr, hasAcknowledgedDiscrepancies);
   };
 
   const handleAcknowledgeAndDownload = () => {
     setHasAcknowledgedDiscrepancies(true);
-    executeDownload(true);
+    executeDownload(businessName, businessAddress, true);
   };
 
   return (
@@ -565,7 +643,7 @@ export function ExtractionResultView({
             )}
           </div>
 
-          {/* Transparent Trust Label */}
+          {/* Transparent Status Pill */}
           <div
             className={`extraction-dashboard__status-pill ${
               isExportBlocked
@@ -574,21 +652,19 @@ export function ExtractionResultView({
             }`}
             title={
               isExportBlocked
-                ? `${unreviewedCount} transactions require human review before PDF export`
-                : 'All transactions confirmed by human reviewer. Ready for formal PDF export.'
+                ? `${needsReviewCount} transaction(s) require review before statement export`
+                : 'All transactions verified. Ready for statement export.'
             }
           >
             {isExportBlocked ? (
               <>
-                <ShieldAlert size={15} aria-hidden="true" />
-                <span>
-                  {humanReviewedCount}/{totalEntries} Reviewed • {unreviewedCount} Pending
-                </span>
+                <AlertTriangle size={15} aria-hidden="true" />
+                <span>{needsReviewCount} Requires Review</span>
               </>
             ) : (
               <>
-                <CheckCircle2 size={15} aria-hidden="true" />
-                <span>All {totalEntries} Entries Confirmed</span>
+                <ShieldCheck size={15} aria-hidden="true" />
+                <span>All {totalEntries} Entries Verified</span>
               </>
             )}
           </div>
@@ -603,7 +679,7 @@ export function ExtractionResultView({
             disabled={isGeneratingPdf}
             title={
               isExportBlocked
-                ? `Review Required: ${unreviewedCount} unreviewed transaction(s) must be confirmed before generating statement.`
+                ? `Review Required: Please resolve ${needsReviewCount} flagged transaction(s) in Step 2 first.`
                 : 'Download accountant-prepared Business Sales Statement PDF for loan documentation'
             }
             aria-label="Download Business Sales Statement PDF"
@@ -615,8 +691,8 @@ export function ExtractionResultView({
               </>
             ) : isExportBlocked ? (
               <>
-                <ShieldAlert size={15} aria-hidden="true" />
-                <span>Review to Export PDF ({unreviewedCount})</span>
+                <AlertTriangle size={15} aria-hidden="true" />
+                <span>Resolve {needsReviewCount} Issue(s)</span>
               </>
             ) : (
               <>
@@ -676,38 +752,28 @@ export function ExtractionResultView({
         <main className="extraction-dashboard__content-pane">
           {activeTab === 'records' ? (
             <div className="extraction-dashboard__records-tab">
-              {/* Mandatory Review Gate Banner (if transactions remain unconfirmed) */}
-              {isExportBlocked && (
+              {/* Only show review banner if genuine issues exist */}
+              {needsReviewCount > 0 && (
                 <div className="extraction-dashboard__gate-banner" role="alert">
                   <div className="extraction-dashboard__gate-icon-wrap">
-                    <ShieldAlert size={22} aria-hidden="true" />
+                    <AlertTriangle size={22} aria-hidden="true" />
                   </div>
                   <div className="extraction-dashboard__gate-text">
                     <h3 className="extraction-dashboard__gate-title">
-                      Mandatory Human Review Gate Active
+                      Action Required: {needsReviewCount} Transaction(s) Need Attention
                     </h3>
                     <p className="extraction-dashboard__gate-desc">
-                      PDF statement generation is strictly blocked until every transaction is confirmed.
-                      Currently, <strong>{unreviewedCount} of {totalEntries}</strong> transactions require confirmation.
-                      You can edit, confirm as-is, or delete unwanted entries.
+                      High-confidence entries were automatically accepted. Please review the highlighted
+                      items with missing amounts or uncertain readings before generating the statement.
                     </p>
                     <div className="extraction-dashboard__gate-actions">
                       <button
                         type="button"
                         className="extraction-dashboard__gate-btn extraction-dashboard__gate-btn--primary"
-                        onClick={handleReviewNextUnconfirmed}
+                        onClick={handleReviewNextFlagged}
                       >
                         <Pencil size={14} aria-hidden="true" />
-                        <span>Review Next Pending Entry</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="extraction-dashboard__gate-btn extraction-dashboard__gate-btn--secondary"
-                        onClick={handleConfirmAllCleanEntries}
-                        title="Confirm all entries that have no AI uncertainty flags or missing prices"
-                      >
-                        <Check size={14} aria-hidden="true" />
-                        <span>Confirm Remaining Clean Entries</span>
+                        <span>Review Flagged Entry</span>
                       </button>
                     </div>
                   </div>
@@ -761,12 +827,22 @@ export function ExtractionResultView({
                     </strong>
                   </div>
 
-                  {unpricedEntries > 0 && (
-                    <div className="extraction-dashboard__metric extraction-dashboard__metric--unpriced">
-                      <Tag size={16} aria-hidden="true" />
-                      <span className="extraction-dashboard__metric-label">Not Recorded:</span>
+                  {autoAcceptedCount > 0 && (
+                    <div className="extraction-dashboard__metric extraction-dashboard__metric--auto">
+                      <Check size={16} aria-hidden="true" />
+                      <span className="extraction-dashboard__metric-label">Auto Verified:</span>
                       <strong className="extraction-dashboard__metric-value tabular-nums">
-                        {unpricedEntries}
+                        {autoAcceptedCount}
+                      </strong>
+                    </div>
+                  )}
+
+                  {humanReviewedCount > 0 && (
+                    <div className="extraction-dashboard__metric extraction-dashboard__metric--reviewed">
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                      <span className="extraction-dashboard__metric-label">Human Reviewed:</span>
+                      <strong className="extraction-dashboard__metric-value tabular-nums">
+                        {humanReviewedCount}
                       </strong>
                     </div>
                   )}
@@ -780,20 +856,6 @@ export function ExtractionResultView({
                       </strong>
                     </div>
                   )}
-
-                  <div
-                    className={`extraction-dashboard__metric ${
-                      humanReviewedCount === totalEntries
-                        ? 'extraction-dashboard__metric--reviewed'
-                        : 'extraction-dashboard__metric--partial'
-                    }`}
-                  >
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                    <span className="extraction-dashboard__metric-label">Human Confirmed:</span>
-                    <strong className="extraction-dashboard__metric-value tabular-nums">
-                      {humanReviewedCount} / {totalEntries}
-                    </strong>
-                  </div>
                 </div>
               </div>
 
@@ -875,22 +937,17 @@ export function ExtractionResultView({
                               />
                               <div className="extraction-group__feedback-text">
                                 <p className="extraction-group__feedback-title">
-                                  Possible totaling mismatch
+                                  Totaling mismatch detected
                                 </p>
                                 <p className="extraction-group__feedback-msg">
                                   Your written total is <strong>₹{writtenSubtotal}</strong>, but
                                   the listed entries add up to <strong>₹{calculatedSum}</strong>{' '}
                                   (difference of ₹{Math.abs(writtenSubtotal - calculatedSum)}).
-                                  Both amounts will be presented in the statement.
                                 </p>
                                 {unpricedInGroup.length > 0 && (
                                   <p className="extraction-group__feedback-note">
                                     Note: {unpricedInGroup.length}{' '}
-                                    {unpricedInGroup.length === 1 ? 'entry' : 'entries'} (
-                                    {unpricedInGroup
-                                      .map((e) => getEffectiveDescription(e) || 'Item')
-                                      .join(', ')}
-                                    ) has no recorded price and is excluded from the calculated sum.
+                                    {unpricedInGroup.length === 1 ? 'entry' : 'entries'} has no recorded price.
                                   </p>
                                 )}
                               </div>
@@ -911,36 +968,10 @@ export function ExtractionResultView({
                                   Written subtotal (₹{writtenSubtotal}) equals calculated entry sum
                                   (₹{calculatedSum}).
                                 </p>
-                                {unpricedInGroup.length > 0 && (
-                                  <p className="extraction-group__feedback-note">
-                                    ({unpricedInGroup.length}{' '}
-                                    {unpricedInGroup.length === 1
-                                      ? 'unpriced entry is'
-                                      : 'unpriced entries are'}{' '}
-                                    excluded from the sum.)
-                                  </p>
-                                )}
                               </div>
                             </div>
                           )
-                        ) : (
-                          <div
-                            className="extraction-group__feedback-card extraction-group__feedback-card--info"
-                            role="status"
-                          >
-                            <Info
-                              size={18}
-                              className="extraction-group__feedback-icon"
-                              aria-hidden="true"
-                            />
-                            <div className="extraction-group__feedback-text">
-                              <p className="extraction-group__feedback-msg">
-                                No subtotal was written on this section. Calculated entry sum is{' '}
-                                <strong>₹{calculatedSum}</strong>.
-                              </p>
-                            </div>
-                          </div>
-                        )}
+                        ) : null}
 
                         {group.notes && (
                           <p className="extraction-group__notes">
@@ -983,6 +1014,7 @@ export function ExtractionResultView({
                                   const status = getEntryStatus(entry);
                                   const isFlagged = status === 'needs_review';
                                   const isReviewed = status === 'human_reviewed';
+                                  const isAuto = status === 'auto_accepted';
                                   const unpriced = isEntryUnpriced(entry);
 
                                   const effectiveDesc = getEffectiveDescription(entry);
@@ -1067,7 +1099,7 @@ export function ExtractionResultView({
                                         {isReviewed ? (
                                           <div className="extraction-table__reviewed-pill">
                                             <CheckCircle2 size={13} aria-hidden="true" />
-                                            <span>Human reviewed</span>
+                                            <span>Reviewed</span>
                                           </div>
                                         ) : isFlagged ? (
                                           <div
@@ -1075,28 +1107,20 @@ export function ExtractionResultView({
                                             title={entry.flag_reason || 'Needs review'}
                                           >
                                             <AlertTriangle size={13} aria-hidden="true" />
-                                            <span>Needs review</span>
+                                            <span>Needs Review</span>
                                           </div>
-                                        ) : (
+                                        ) : isAuto ? (
                                           <span
-                                            className="extraction-table__ai-pill"
-                                            title="Directly transcribed from document by AI vision model"
+                                            className="extraction-table__auto-pill"
+                                            title="High confidence transcription"
                                           >
-                                            <Sparkles size={13} aria-hidden="true" />
-                                            <span>Unconfirmed</span>
+                                            <Check size={13} aria-hidden="true" />
+                                            <span>Accepted</span>
                                           </span>
-                                        )}
+                                        ) : null}
                                         {!isReviewed && isFlagged && entry.flag_reason && (
                                           <span className="extraction-table__flag-reason">
                                             {entry.flag_reason}
-                                          </span>
-                                        )}
-                                        {isReviewed && entry.review_note && (
-                                          <span
-                                            className="extraction-table__review-note"
-                                            title={entry.review_note}
-                                          >
-                                            Note: {entry.review_note}
                                           </span>
                                         )}
                                       </td>
@@ -1117,12 +1141,12 @@ export function ExtractionResultView({
                                                 entryIndex: eIdx,
                                               })
                                             }
-                                            aria-label={`Review or edit entry #${
+                                            aria-label={`Edit entry #${
                                               entry.entry_index || eIdx + 1
                                             }`}
                                           >
                                             <Pencil size={13} aria-hidden="true" />
-                                            <span>{isReviewed ? 'Edit' : 'Review'}</span>
+                                            <span>{isFlagged ? 'Review' : 'Edit'}</span>
                                           </button>
 
                                           <button
@@ -1169,10 +1193,10 @@ export function ExtractionResultView({
                   />
                   <div>
                     <h3 className="extraction-dashboard__reconciliation-title">
-                      Page Financial Reconciliation
+                      Sales Total Overview
                     </h3>
                     <p className="extraction-dashboard__reconciliation-subtitle">
-                      Clear comparison of individual entries, written section subtotals, and page grand total.
+                      Summary of individual entries and written section subtotals.
                     </p>
                   </div>
                 </div>
@@ -1180,19 +1204,19 @@ export function ExtractionResultView({
                 <div className="extraction-dashboard__reconciliation-grid">
                   <div className="extraction-dashboard__reconciliation-item">
                     <span className="extraction-dashboard__reconciliation-item-label">
-                      Sum of Entries (Calculated)
+                      Sum of Entries
                     </span>
                     <strong className="extraction-dashboard__reconciliation-item-val tabular-nums">
                       ₹{pageCalculatedEntriesSum}
                     </strong>
                     <span className="extraction-dashboard__reconciliation-item-desc">
-                      Sum of {totalEntries - unpricedEntries} priced line items across all groups
+                      Sum of {totalEntries - unpricedEntries} priced items across all sections
                     </span>
                   </div>
 
                   <div className="extraction-dashboard__reconciliation-item">
                     <span className="extraction-dashboard__reconciliation-item-label">
-                      Sum of Group Subtotals
+                      Sum of Written Subtotals
                     </span>
                     <strong className="extraction-dashboard__reconciliation-item-val tabular-nums">
                       {groupsWithWrittenSubtotal.length > 0
@@ -1201,44 +1225,21 @@ export function ExtractionResultView({
                     </strong>
                     <span className="extraction-dashboard__reconciliation-item-desc">
                       {groupsWithWrittenSubtotal.length} of {currentExtraction.groups.length}{' '}
-                      groups have written subtotals
+                      sections have written subtotals
                     </span>
                   </div>
 
                   <div className="extraction-dashboard__reconciliation-item">
                     <span className="extraction-dashboard__reconciliation-item-label">
-                      Written Page Grand Total
+                      Written Page Total
                     </span>
                     <strong className="extraction-dashboard__reconciliation-item-val tabular-nums">
                       {writtenPageTotal !== null ? `₹${writtenPageTotal}` : 'Not recorded'}
                     </strong>
                     <span className="extraction-dashboard__reconciliation-item-desc">
-                      Explicit total written at bottom of physical page
+                      Total written at bottom of physical page
                     </span>
                   </div>
-                </div>
-
-                <div className="extraction-dashboard__reconciliation-footer">
-                  {writtenPageTotal !== null ? (
-                    Math.abs(writtenPageTotal - pageCalculatedEntriesSum) < 0.001 ? (
-                      <span className="extraction-dashboard__reconciliation-status extraction-dashboard__reconciliation-status--match">
-                        <CheckCircle2 size={16} aria-hidden="true" />
-                        Page Reconciled: Written page grand total (₹{writtenPageTotal}) exactly matches calculated entry sum.
-                      </span>
-                    ) : (
-                      <span className="extraction-dashboard__reconciliation-status extraction-dashboard__reconciliation-status--discrepancy">
-                        <AlertTriangle size={16} aria-hidden="true" />
-                        Reconciliation Notice: Written page total is ₹{writtenPageTotal},
-                        while calculated entries sum to ₹{pageCalculatedEntriesSum} (difference of
-                        ₹{Math.abs(writtenPageTotal - pageCalculatedEntriesSum)}).
-                      </span>
-                    )
-                  ) : (
-                    <span className="extraction-dashboard__reconciliation-status extraction-dashboard__reconciliation-status--info">
-                      <Info size={16} aria-hidden="true" />
-                      No grand page total was written at the bottom of the page. Total calculated across all groups is ₹{pageCalculatedEntriesSum}.
-                    </span>
-                  )}
                 </div>
               </section>
 
@@ -1256,22 +1257,53 @@ export function ExtractionResultView({
                     />
                     <div>
                       <h3 className="extraction-dashboard__export-title">
-                        Business Sales Statement (Supporting Financial Records)
+                        Business Sales Statement (Loan Documentation)
                       </h3>
                       <p className="extraction-dashboard__export-desc">
-                        Download a formal, accountant-style Business Sales Statement and Daily Sales Register
-                        suitable as supporting financial documentation for loan applications.
+                        Download a formal, accountant-prepared Business Sales Statement and Daily Sales Register
+                        suitable as supporting financial records for loan applications.
                       </p>
                     </div>
                   </div>
 
-                  {/* Review Gate Warning if blocked */}
+                  {/* Business Details Preview Card with Edit Action */}
+                  <div className="extraction-dashboard__biz-preview-card">
+                    <Building2 size={16} className="extraction-dashboard__biz-icon" aria-hidden="true" />
+                    <div className="extraction-dashboard__biz-text">
+                      <span className="extraction-dashboard__biz-label">Business Information on Statement:</span>
+                      <strong className="extraction-dashboard__biz-val">
+                        {businessName ? (
+                          <>
+                            {businessName}
+                            {businessAddress && ` • ${businessAddress}`}
+                          </>
+                        ) : (
+                          <span className="extraction-dashboard__biz-empty">
+                            No business details entered (Click edit to add)
+                          </span>
+                        )}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="extraction-dashboard__biz-edit-btn"
+                      onClick={() => {
+                        setTempBizName(businessName);
+                        setTempBizAddress(businessAddress);
+                        setShowBusinessInfoModal(true);
+                      }}
+                    >
+                      <Pencil size={13} aria-hidden="true" />
+                      <span>{businessName ? 'Edit Details' : 'Add Details'}</span>
+                    </button>
+                  </div>
+
+                  {/* Warning if export is blocked by unresolved flags */}
                   {isExportBlocked && (
                     <div className="extraction-dashboard__gate-callout" role="alert">
-                      <ShieldAlert size={16} aria-hidden="true" />
+                      <AlertTriangle size={16} aria-hidden="true" />
                       <span>
-                        Export blocked: <strong>{unreviewedCount}</strong> transaction(s) pending human review.
-                        Every entry must be confirmed or deleted before generating the statement.
+                        Statement generation blocked: <strong>{needsReviewCount}</strong> transaction(s) require review in Step 2.
                       </span>
                     </div>
                   )}
@@ -1300,8 +1332,8 @@ export function ExtractionResultView({
                     </>
                   ) : isExportBlocked ? (
                     <>
-                      <ShieldAlert size={16} aria-hidden="true" />
-                      <span>Complete Review ({unreviewedCount} Pending)</span>
+                      <AlertTriangle size={16} aria-hidden="true" />
+                      <span>Review Required ({needsReviewCount})</span>
                     </>
                   ) : (
                     <>
@@ -1477,6 +1509,110 @@ export function ExtractionResultView({
         </div>
       )}
 
+      {/* Business Information Collection Modal */}
+      {showBusinessInfoModal && (
+        <div
+          className="review-modal__backdrop"
+          onClick={() => setShowBusinessInfoModal(false)}
+          role="presentation"
+        >
+          <div
+            className="review-modal review-modal--biz-info"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="biz-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="review-modal__header">
+              <div className="review-modal__title-wrap">
+                <div className="review-modal__icon-badge">
+                  <Building2 size={18} aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 id="biz-modal-title" className="review-modal__title">
+                    Business Information
+                  </h2>
+                  <span className="review-modal__subtitle">
+                    Enter details to appear on your official Sales Statement
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="review-modal__close-btn"
+                onClick={() => setShowBusinessInfoModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+
+            <form onSubmit={handleSaveBusinessInfo}>
+              <div className="review-modal__body">
+                <div className="review-modal__field">
+                  <label htmlFor="biz-name-input" className="review-modal__label">
+                    <span>Business / Trade Name</span>
+                    <span className="review-modal__label-hint">As registered or known locally</span>
+                  </label>
+                  <input
+                    id="biz-name-input"
+                    type="text"
+                    className="review-modal__input"
+                    value={tempBizName}
+                    onChange={(e) => setTempBizName(e.target.value)}
+                    placeholder="e.g. Asha Beauty Parlour"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="review-modal__field">
+                  <label htmlFor="biz-addr-input" className="review-modal__label">
+                    <span>Business Address</span>
+                    <span className="review-modal__label-hint">Shop number, street, city</span>
+                  </label>
+                  <input
+                    id="biz-addr-input"
+                    type="text"
+                    className="review-modal__input"
+                    value={tempBizAddress}
+                    onChange={(e) => setTempBizAddress(e.target.value)}
+                    placeholder="e.g. Shop No. 4, Shivaji Chowk, Pune"
+                  />
+                </div>
+
+                <label className="extraction-dashboard__discrepancy-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={rememberBusinessDetails}
+                    onChange={(e) => setRememberBusinessDetails(e.target.checked)}
+                  />
+                  <span>
+                    Remember business details for future statements on this browser
+                  </span>
+                </label>
+              </div>
+
+              <footer className="review-modal__footer">
+                <button
+                  type="button"
+                  className="review-modal__cancel-btn"
+                  onClick={() => setShowBusinessInfoModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="review-modal__save-btn"
+                >
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  <span>Save & Continue to PDF</span>
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Discrepancy Acknowledgment Modal */}
       {showDiscrepancyModal && (
         <div
@@ -1498,10 +1634,10 @@ export function ExtractionResultView({
                 </div>
                 <div>
                   <h2 id="discrepancy-modal-title" className="review-modal__title">
-                    Acknowledge Subtotal Discrepancy
+                    Acknowledge Subtotal Difference
                   </h2>
                   <span className="review-modal__subtitle">
-                    Handwritten totals differ from transaction sums
+                    Handwritten subtotal differs from sum of entries
                   </span>
                 </div>
               </div>
@@ -1517,7 +1653,7 @@ export function ExtractionResultView({
 
             <div className="review-modal__body">
               <p className="extraction-dashboard__discrepancy-intro">
-                The handwritten subtotals recorded on the ledger do not match the calculated sum of the line items:
+                The handwritten subtotals on the notebook differ from the arithmetic sum of the listed items:
               </p>
 
               <div className="extraction-dashboard__discrepancy-list">
@@ -1530,8 +1666,8 @@ export function ExtractionResultView({
                       </span>
                     </div>
                     <div className="extraction-dashboard__discrepancy-details">
-                      <span>Written Subtotal: <strong>₹{d.writtenSubtotal.toFixed(2)}</strong></span>
-                      <span>Calculated Sum: <strong>₹{d.calculatedTotal.toFixed(2)}</strong></span>
+                      <span>Written: <strong>₹{d.writtenSubtotal.toFixed(2)}</strong></span>
+                      <span>Sum: <strong>₹{d.calculatedTotal.toFixed(2)}</strong></span>
                     </div>
                   </div>
                 ))}
@@ -1540,7 +1676,7 @@ export function ExtractionResultView({
               <div className="extraction-dashboard__discrepancy-note">
                 <Info size={16} aria-hidden="true" />
                 <p>
-                  In accordance with formal accounting principles, the statement will report both the handwritten recorded amounts and the calculated sums transparently in Section 3 (Sales Reconciliation). Neither figure is altered.
+                  The sales statement will report the verified line-item sales total. Please acknowledge that you have reviewed this arithmetic difference before continuing.
                 </p>
               </div>
 
@@ -1551,7 +1687,7 @@ export function ExtractionResultView({
                   onChange={(e) => setDiscrepancyAcknowledged(e.target.checked)}
                 />
                 <span>
-                  I acknowledge these arithmetic differences and confirm that the statement should reflect the ledger records as written.
+                  I acknowledge this difference and confirm the sales entries are accurate.
                 </span>
               </label>
             </div>

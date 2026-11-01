@@ -37,16 +37,31 @@ Light theme only, mobile-first. Small shopkeepers will use the application on ph
 
 ## Review & Correction Workflow UI
 
-### 1. Mandatory Review Gate
+### 1. Targeted Review Gate & Auto-Verification
+- Clean, high-confidence entries are automatically marked with the "Auto-Accepted" pill (`--state-success`).
+- Only entries with missing prices, unreadable text, or explicit flags are marked with "Needs Review" (`--state-flag`).
 - Top bar and export card download buttons:
-  - If any transaction remains unconfirmed: marked with `ShieldAlert` icon, displaying count of pending reviews (e.g. `Review to Export PDF (24)`).
-  - If all transactions are confirmed: green `Download` icon, active state.
-- **Review Gate Banner**:
-  - Displays progress: `X of Y transactions require confirmation`.
-  - Action button: `Review Next Pending Entry` (opens modal for first unreviewed row).
-  - Quick action button: `Confirm Remaining Clean Entries` (confirms all unflagged, priced rows in one click).
+  - If any flagged transaction remains unresolved: marked with `AlertTriangle` icon, displaying count of pending issues (e.g. `Resolve Issues to Export PDF (1)`).
+  - If all issues are resolved (even with auto-accepted entries): active state with `Download` icon.
+- **Review Attention Banner**:
+  - Displays count of entries requiring human attention.
+  - Action button: `Review Next Flagged Entry` (opens modal for the next unresolved row).
 
-### 2. Transaction Review Modal (`EntryReviewModal.tsx`)
+### 2. Business Information Collection Modal & Persistence
+- Triggered automatically before statement download if business details have not been supplied.
+- Fields:
+  - Business / Trade Name input.
+  - Business Address textarea / input.
+  - Checkbox: "Remember business details on this device" (persisted in `localStorage`).
+- Actions:
+  - `Cancel` (dismisses modal).
+  - `Save & Download Statement` (saves details and initiates statement generation).
+- **Business Details Preview Card**:
+  - Displayed in the export section when business details exist.
+  - Shows configured trade name and address.
+  - Includes an "Edit Details" button allowing instant updates.
+
+### 3. Transaction Review Modal (`EntryReviewModal.tsx`)
 - Desktop: centered modal with backdrop blur.
 - Mobile: responsive bottom sheet (`max-width: 100%`, `border-radius: 16px 16px 0 0`).
 - Fields:
@@ -57,26 +72,26 @@ Light theme only, mobile-first. Small shopkeepers will use the application on ph
 - Actions:
   - `Cancel` (escapes without state change).
   - `Delete` (opens delete confirmation).
-  - `Confirm As-Is` (confirms existing AI values without modifications).
   - `Save & Confirm` (validates description and saves changes as `human_reviewed`).
+- Immediate reactive recalculation of all daily totals and overall sales totals upon saving.
 
-### 3. Transaction Deletion with Confirmation
-- Per-row `Trash2` icon button on every table row.
+### 4. Transaction Deletion with Confirmation
+- Per-row `Trash2` icon button on every table row (both auto-accepted and flagged).
 - **Confirmation Dialog**:
   - Highlights row number, Marathi description, and amount.
   - Explains: "This transaction will be completely excluded from all calculated totals and will not appear in the generated statement."
   - Explicit `Cancel` and red `Confirm Delete` buttons.
 - On deletion, rows are sequentially re-indexed (`1, 2, 3...`) and all totals update reactively.
 
-### 4. Arithmetic Discrepancy Acknowledgment Modal
+### 5. Arithmetic Discrepancy Acknowledgment Modal
 - Triggered when user attempts PDF download while section handwritten subtotals differ from calculated entry sums.
 - Displays each section's date, handwritten subtotal, calculated sum, and difference.
-- Non-judgmental explanation of why both figures are preserved in Section 3 (Sales Reconciliation).
+- Non-judgmental explanation of why both figures are preserved.
 - Checkbox: "I acknowledge these arithmetic differences and confirm that the statement should reflect the ledger records as written."
-- Primary button: "Acknowledge & Download PDF".
+- Primary button: "Acknowledge & Download Statement".
 
-### 5. Transparent Status Pills
-- `AI Extracted`: shown on initial extraction before user review.
-- `Needs Review`: shown on rows with AI uncertainty flags or missing prices.
-- `Human Reviewed`: green checkmark, reserved strictly for entries confirmed or edited by the user.
-- Status counter: `{reviewedCount}/{totalCount} Reviewed • {unreviewedCount} Pending`.
+### 6. Transparent Status Pills (Step 2 Only)
+- `Auto-Accepted`: green badge indicating clean description and price verified with zero uncertainty flags.
+- `Needs Review`: amber badge indicating missing price, smudge, or ambiguity.
+- `Human Reviewed`: blue badge reserved strictly for entries manually edited or confirmed by the user.
+- Status counter: `{cleanOrReviewedCount}/{totalCount} Ready • {needsReviewCount} Attention Needed`.

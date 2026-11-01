@@ -6,7 +6,7 @@
 
 export type EntryType = 'income' | 'expense' | 'credit' | 'debit' | 'unknown';
 
-export type ReviewStatus = 'ai_extracted' | 'needs_review' | 'human_reviewed';
+export type ReviewStatus = 'ai_extracted' | 'needs_review' | 'human_reviewed' | 'auto_accepted';
 
 export interface ExtractedLedgerEntry {
   entry_index: number;

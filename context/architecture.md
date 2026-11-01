@@ -41,37 +41,43 @@ Deferred: OpenCV, SQLite, WhatsApp, Tally, GST, credit scoring, lender integrati
 
 ## Review Gate & Financial Validation Architecture
 
-1. **Mandatory Human-Review Gate**:
+1. **Intelligent Auto-Verification & Targeted Review Gate**:
+   - `is_high_confidence_entry(entry)` checks if an extracted transaction has a valid description, positive amount, and zero uncertainty flags or flag reasons. Clean entries are accepted automatically (`auto_accepted`).
+   - `requires_human_attention(entry)` flags only entries with genuine ambiguity, missing descriptions, unpriced amounts, or explicit uncertainty flags.
    - `check_review_gate(extraction)` traverses all entries across all groups.
-   - Requires every remaining entry to have `review_status == "human_reviewed"`.
-   - Rejects entries with unresolved missing descriptions or invalid data.
-   - Blocks PDF generation with HTTP 422 (`review_gate_failed`) if any entry is unreviewed.
-   - Enforced client-side (disabled buttons, warning callouts) and server-side (cannot be bypassed by direct API calls).
+   - Blocks PDF generation with HTTP 422 (`review_gate_failed`) only if any unresolved flagged entry remains.
+   - All entries (including auto-accepted entries) remain fully editable and deletable at any time.
+   - Enforced client-side (badge alerts, review buttons) and server-side (cannot be bypassed by direct API calls).
 
-2. **Transaction Deletion & Sequential Re-Indexing**:
+2. **Immediate Dynamic Recalculation & Deletion**:
    - Users can delete unwanted or incorrectly detected transactions with a confirmation dialog.
    - Deletion removes the item from the group's `entries` array.
    - Remaining entries are sequentially re-indexed (`entry_index: 1, 2, 3...`) to maintain accounting register integrity.
-   - All group sums, page sums, discrepancy calculations, and review counts recalculate reactively.
+   - All group sums, page sums, discrepancy calculations, and review counts recalculate reactively upon editing or deletion.
+   - Deleted entries are completely excluded everywhere, including the exported PDF.
 
-3. **Discrepancy Acknowledgment Gate**:
-   - Compares handwritten subtotals (`recorded_group_total`) against calculated item sums (`calculate_group_sum`).
-   - If a mismatch exists (e.g. written ₹780 vs. calculated ₹740), the user must explicitly acknowledge the discrepancy before generating the PDF statement (`acknowledge_discrepancies: true`).
-   - Both figures are transparently presented in Section 3 (Sales Reconciliation) of the PDF; neither figure is altered.
+3. **Business Details Management**:
+   - Before statement export, missing business name and address are requested.
+   - Users can enable "Remember business details", saving preferences securely in browser `localStorage` (`ledgerpilot_business_details`) without introducing database dependencies or accounts.
+   - Stored business details can be viewed and edited at any time.
 
-4. **PDF Generator Architecture (`pdf_generator.py`)**:
+4. **Discrepancy Acknowledgment Gate**:
+   - Compares handwritten subtotals (`recorded_group_total`) against calculated item sums (`calculate_group_effective_sum`).
+   - If a mismatch exists (e.g. written ₹780 vs. calculated ₹740), the user must explicitly acknowledge the discrepancy in Step 2 before generating the PDF statement (`acknowledge_discrepancies: true`).
+
+5. **PDF Generator Architecture (`pdf_generator.py`)**:
    - Server-side generation using ReportLab `SimpleDocTemplate` and custom `TemplateCanvas`.
    - Top navy accent line and running footer (`Page X of Y`) drawn on all pages.
    - Native Unicode font registration: `NirmalaUI` (`Nirmala.ttc`), `Mangal` (`mangal.ttf`), or Linux Noto Devanagari.
    - Clean omission rules: when business details are omitted, the card formats cleanly without printing "Not Provided".
-   - Zero AI terminology in customer-facing PDF document.
+   - Generates strictly the finished financial statement for loan officers: excludes internal workflow, review, and AI terminology (e.g. "Pending Confirmation", "Human Reviewed", "Exact Match", "Handwritten Subtotal").
 
 ## Invariants
 
 1. The vision LLM API key never leaves the backend.
 2. No silent guessing: unreadable or unpriced values are `null` and flagged, never filled with a plausible guess.
-3. Every transaction must be human-confirmed before formal statement PDF export.
+3. High confidence entries are automatically accepted; genuine uncertainties must be resolved before PDF export.
 4. Deleted transactions are completely excluded from totals and calculations.
-5. Original AI extractions remain immutable; corrections are stored alongside them.
-6. Handwritten subtotals and calculated sums are kept strictly separate; discrepancies are never hidden.
-7. Customer-facing financial statements omit unavailable metadata cleanly and never contain AI/LLM terms.
+5. All transactions remain editable and deletable, and edits immediately recalculate all totals.
+6. Original AI extractions remain immutable; corrections are stored alongside them.
+7. Customer-facing financial statements omit unavailable metadata cleanly and contain only finished financial records with zero internal review or AI terminology.

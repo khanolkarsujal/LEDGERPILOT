@@ -3,8 +3,8 @@ API router for report generation (PDF and exports).
 
 Endpoints:
 - POST /api/reports/pdf: Generates and streams the Business Sales Statement PDF.
-  Enforces mandatory human-review gate: every transaction must be confirmed,
-  and any totaling discrepancies must be acknowledged.
+  Enforces review gate: all genuine uncertainties must be resolved before export.
+  High-confidence transactions are automatically accepted.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -28,25 +28,25 @@ router = APIRouter(prefix="/api/reports", tags=["Reports"])
 def export_pdf_report(request: PDFReportRequest) -> Response:
     """
     Generates a professional Business Sales Statement PDF from
-    the structured ledger records and human review confirmations.
+    the finalized ledger records.
 
-    Enforces mandatory review gate:
-    1. Every entry must have review_status == 'human_reviewed'.
-    2. No missing descriptions or unconfirmed values.
+    Enforces review gate:
+    1. All genuine uncertainties or missing values must be resolved in Step 2.
+    2. High-confidence transactions are accepted automatically.
     3. If handwritten subtotals differ from calculated totals,
-       the user must explicitly acknowledge discrepancies.
+       the user must acknowledge discrepancies.
     """
-    # ── 1. Mandatory Review Gate ──
+    # ── 1. Review Gate: Unresolved uncertainties check ──
     gate = check_review_gate(request.extraction)
     if not gate.passed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "error": "review_gate_failed",
-                "message": "PDF generation blocked: not all entries have been reviewed.",
-                "unreviewed_count": gate.unreviewed_count,
+                "message": f"PDF generation blocked: {gate.unresolved_count} transaction(s) have unresolved issues.",
+                "unresolved_count": gate.unresolved_count,
                 "total_entries": gate.total_entries,
-                "reviewed_count": gate.reviewed_count,
+                "accepted_count": gate.accepted_count,
                 "blocking_reasons": gate.blocking_reasons,
             },
         )
@@ -60,7 +60,7 @@ def export_pdf_report(request: PDFReportRequest) -> Response:
                 "error": "discrepancy_not_acknowledged",
                 "message": (
                     "Handwritten subtotals differ from calculated totals. "
-                    "You must acknowledge the discrepancies before generating the statement."
+                    "You must acknowledge the discrepancies in Step 2 before generating the statement."
                 ),
                 "discrepancies": [
                     {

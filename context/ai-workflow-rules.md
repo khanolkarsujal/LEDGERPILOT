@@ -19,15 +19,16 @@ photo of handwritten ledger page -> asynchronous background AI extraction -> spl
 These apply to every unit of work:
 
 - **Never Silently Guess**: If a value is unreadable, missing, or uncertain, return it as `null`, flag it, and show it beside the original photo for the user to confirm or fix. Never invent dates, amounts, or transaction types.
+- **Intelligent Auto-Verification**: Automatically accept clean entries with valid descriptions, positive amounts, and zero uncertainty flags (`auto_accepted`). Only flag genuinely ambiguous, missing, or suspicious values for human review.
+- **Immediate Dynamic Recalculation**: Whenever an entry is edited or deleted, immediately recalculate all affected daily totals and overall totals. Completely exclude deleted entries everywhere, including the final PDF.
 - **Preserve Missing Amounts**: Never convert missing amounts into ₹0. An unpriced entry must remain `null` or visibly "Not Recorded".
 - **Preserve Marathi Text**: Transcribe handwritten Marathi text verbatim in Devanagari script. Do not translate descriptions into English.
-- **Preserve Recorded Totals Separately**: Never silently correct a shopkeeper's arithmetic: if individual line items sum to a different figure than the written total, preserve the written figure intact and flag the difference as an arithmetic discrepancy for human review.
-- **Mandatory Review Gate**: PDF statement export must be strictly blocked until 100% of remaining transactions are human-confirmed. Direct API calls must not bypass this gate.
-- **Non-Destructive Deletion**: Unwanted or incorrect transactions can be deleted with confirmation. Deleted items must be completely excluded from all calculations, and remaining items must be sequentially re-indexed.
-- **Discrepancy Acknowledgment**: If handwritten subtotals differ from calculated sums, require explicit user acknowledgment before generating the PDF statement.
+- **Preserve Recorded Totals Separately**: Never silently correct a shopkeeper's arithmetic: if individual line items sum to a different figure than the written total, preserve the written figure intact and flag the difference as an arithmetic discrepancy for human review in Step 2.
+- **Targeted Review Gate**: PDF statement export must be blocked if any unresolved flagged entries remain. Direct API calls must not bypass this gate.
+- **Business Details Collection**: Collect business name and address before generating the PDF if missing; offer a "Remember business details" option via `localStorage` without requiring a database.
 - **Clean Document Formatting**:
-  - Customer-facing PDF statements must strictly match the accountant-style template.
-  - Never print internal AI/LLM terms ("AI Extracted", "Gemini", "LLM", "Prompt") in exported documents.
+  - Customer-facing PDF statements must strictly present the finalized financial records for loan documentation.
+  - Never print internal AI or review terms ("AI Extracted", "Gemini", "LLM", "Prompt", "Pending Confirmation", "Human Reviewed", "Exact Match", "Handwritten Subtotal") in exported documents.
   - If business metadata (name/address) is not provided, omit the fields cleanly; never print "Not Provided", "N/A", or placeholder text.
   - Never claim statements are audited, certified, or guaranteed to be accepted by lenders.
 - **No Token Waste**: Do NOT call Gemini API or rerun image extraction when working on frontend, validation, tests, or PDF reporting. Use existing extraction results and local calculations.

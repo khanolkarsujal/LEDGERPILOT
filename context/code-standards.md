@@ -23,17 +23,28 @@
    - Omit unavailable metadata cleanly: if business name or address is not provided, omit the fields; never print "Not Provided", "N/A", or awkward placeholders.
    - Never describe the document as audited, certified, or guaranteed to be accepted by a lender.
 
-## Mandatory Review Gate Enforcement
+## Targeted Review Gate & Auto-Verification Standards
 
-- The backend PDF endpoint (`POST /api/reports/pdf`) must validate that 100% of remaining transactions have `review_status == 'human_reviewed'`. Direct API requests must be rejected with HTTP 422 (`review_gate_failed`).
-- The frontend must disable statement downloads and display remaining unreviewed counts until all transactions are reviewed or deleted.
-- If discrepancies exist between written subtotals and calculated sums, `acknowledge_discrepancies: true` must be validated before statement generation.
+- Clean, high-confidence extractions (valid description, positive amount, zero uncertainty fields or flag reasons) are automatically accepted (`auto_accepted`), minimizing manual review friction.
+- Ambiguous readings, missing descriptions, or unpriced entries must be resolved by a human before statement export.
+- The backend PDF endpoint (`POST /api/reports/pdf`) validates that zero unresolved flagged entries remain. Direct API requests violating this gate are rejected with HTTP 422 (`review_gate_failed`).
+- The frontend highlights only entries requiring human attention and unblocks statement download as soon as all flags are resolved.
+- If discrepancies exist between written subtotals and calculated sums, `acknowledge_discrepancies: true` must be validated in Step 2 before statement generation.
 
-## Deletion and Re-Indexing Standards
+## Deletion and Dynamic Recalculation Standards
 
 - Deleting an entry must remove it from the transaction array.
 - Remaining entries must be sequentially re-indexed (`1, 2, 3...`) to maintain formal accounting register integrity.
-- All date-group sums, page sums, discrepancy calculations, and review counts must update immediately upon deletion.
+- All date-group sums, page sums, discrepancy calculations, and review counts must update immediately upon editing or deletion.
+- Deleted entries must be completely excluded everywhere, including the final exported PDF.
+
+## Document Generation & Business Information Standards
+
+- Customer-facing PDF statements must strictly present the finalized financial records for loan documentation.
+- The PDF must NOT contain internal workflow or AI terms (e.g. "Pending Confirmation", "Human Reviewed", "AI Extracted", "AI Confidence", "Exact Match", "Handwritten Subtotal", "Calculated vs Handwritten").
+- If business metadata (name/address) is not provided, prompt the user before download and support "Remember business details" in browser `localStorage`.
+- When business metadata is unavailable, omit the fields cleanly; never print "Not Provided", "N/A", or placeholder text.
+- Never describe the document as audited, certified, or guaranteed to be accepted by a lender.
 
 ## TypeScript & React
 

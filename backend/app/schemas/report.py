@@ -57,6 +57,64 @@ def is_entry_unpriced_record(entry: LedgerEntry) -> bool:
     return False
 
 
+def is_high_confidence_entry(entry: LedgerEntry) -> bool:
+    """
+    Determines if an extracted transaction has sufficiently high confidence:
+    - Non-empty description.
+    - Valid positive numerical amount.
+    - Zero uncertainty flags.
+    - Zero flag reasons.
+    High-confidence entries are automatically accepted and do NOT require human confirmation.
+    """
+    desc = get_effective_entry_description(entry)
+    amt = get_effective_entry_amount(entry)
+
+    has_valid_desc = bool(desc and desc.strip())
+    has_valid_amt = amt is not None and amt > 0
+    has_no_uncertainty = len(entry.uncertain_fields or []) == 0
+    has_no_flag_reason = not bool(entry.flag_reason and entry.flag_reason.strip())
+
+    return has_valid_desc and has_valid_amt and has_no_uncertainty and has_no_flag_reason
+
+
+def requires_human_attention(entry: LedgerEntry) -> bool:
+    """
+    Returns True ONLY if an entry has genuine ambiguity, missing required values,
+    or unresolved flags that have not been reviewed by a human.
+    """
+    # If already reviewed and confirmed by human:
+    if entry.review_status == "human_reviewed":
+        # Description must still be present
+        eff_desc = get_effective_entry_description(entry)
+        if not eff_desc or not eff_desc.strip():
+            return True
+        return False
+
+    # For entries that haven't been reviewed by a human:
+    # 1. Missing or unreadable description
+    eff_desc = get_effective_entry_description(entry)
+    if not eff_desc or not eff_desc.strip():
+        return True
+
+    # 2. Missing or unpriced amount (e.g. dash on notebook)
+    if is_entry_unpriced_record(entry) or entry.amount is None:
+        return True
+
+    # 3. Explicit uncertainty flags or flag reason
+    if (entry.uncertain_fields and len(entry.uncertain_fields) > 0) or (
+        entry.flag_reason and entry.flag_reason.strip()
+    ):
+        return True
+
+    # 4. Invalid or non-positive amount
+    amt = get_effective_entry_amount(entry)
+    if amt is None or amt <= 0:
+        return True
+
+    # Otherwise, it has clean description and positive amount with zero flags -> Auto-accepted!
+    return False
+
+
 def calculate_group_effective_sum(group: TransactionGroup) -> Decimal:
     """Sums valid priced amounts in a section using effective values."""
     total = Decimal("0")
@@ -69,25 +127,25 @@ def calculate_group_effective_sum(group: TransactionGroup) -> Decimal:
 
 
 class ReviewGateResult(BaseModel):
-    """Result of the mandatory review gate check."""
+    """Result of the review gate check."""
 
     passed: bool
-    unreviewed_count: int = 0
-    pending_count: int = 0
+    unresolved_count: int = 0
     total_entries: int = 0
-    reviewed_count: int = 0
+    accepted_count: int = 0
     blocking_reasons: List[str] = Field(default_factory=list)
 
 
 def check_review_gate(extraction: LedgerPageExtraction) -> ReviewGateResult:
     """
-    Validates that EVERY remaining transaction has been explicitly reviewed and confirmed
-    by a human before PDF generation is allowed.
+    Validates that all genuine uncertainties, missing values, or suspicious entries
+    have been resolved before PDF generation is allowed.
 
-    Blocks PDF generation if even ONE remaining transaction is:
-    - Unreviewed (review_status != 'human_reviewed')
-    - Pending confirmation / ambiguous
-    - Missing a required unresolved value (e.g. empty description)
+    High-confidence entries are automatically accepted and do NOT block export.
+    Blocks PDF generation if any remaining entry requires human attention:
+    - Missing description.
+    - Missing / unpriced amount not explicitly confirmed.
+    - Ambiguous or flagged entries not reviewed.
     """
     all_entries = [e for g in extraction.groups for e in g.entries]
     total = len(all_entries)
@@ -99,9 +157,7 @@ def check_review_gate(extraction: LedgerPageExtraction) -> ReviewGateResult:
             blocking_reasons=["No transactions found. Cannot generate a statement with zero transactions."],
         )
 
-    reviewed_count = 0
-    unreviewed_count = 0
-    pending_count = 0
+    unresolved_count = 0
     blocking_reasons: List[str] = []
 
     for g_idx, group in enumerate(extraction.groups):
@@ -109,29 +165,21 @@ def check_review_gate(extraction: LedgerPageExtraction) -> ReviewGateResult:
         for e_idx, entry in enumerate(group.entries):
             sr = entry.entry_index if entry.entry_index is not None else e_idx + 1
 
-            # Check 1: Must be explicitly human reviewed
-            if entry.review_status != "human_reviewed":
-                unreviewed_count += 1
-                blocking_reasons.append(
-                    f"Entry #{sr} in '{group_label}' has not been confirmed by a human reviewer."
+            if requires_human_attention(entry):
+                unresolved_count += 1
+                reason = (
+                    entry.flag_reason
+                    or ("Missing amount" if entry.amount is None else "Uncertain reading")
                 )
-                continue
-
-            reviewed_count += 1
-
-            # Check 2: Missing required description
-            eff_desc = get_effective_entry_description(entry)
-            if not eff_desc or not eff_desc.strip():
                 blocking_reasons.append(
-                    f"Entry #{sr} in '{group_label}' is missing a description. Please enter a description or delete this entry."
+                    f"Entry #{sr} in '{group_label}' requires review: {reason}. Please resolve, edit, or delete it in Step 2."
                 )
 
     return ReviewGateResult(
         passed=len(blocking_reasons) == 0,
-        unreviewed_count=unreviewed_count,
-        pending_count=pending_count + unreviewed_count,
+        unresolved_count=unresolved_count,
         total_entries=total,
-        reviewed_count=reviewed_count,
+        accepted_count=total - unresolved_count,
         blocking_reasons=blocking_reasons,
     )
 

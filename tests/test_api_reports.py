@@ -1,22 +1,24 @@
 """
 Unit tests for the Business Sales Statement PDF generation endpoint: POST /api/reports/pdf.
 
-Strictly verifies:
-1. Mandatory Human Review Gate:
-   - PDF generation blocked (422) if even ONE remaining transaction is unreviewed or pending.
-   - Direct backend API cannot bypass the review gate.
-   - PDF enabled (200) only when ALL remaining transactions are human-confirmed.
-2. Deletion & Recalculation:
-   - PDF enabled after an unwanted transaction is deleted and remaining entries are confirmed.
-   - Deleted entries are completely excluded from totals.
-3. Discrepancy Acknowledgment:
-   - If handwritten subtotals differ from calculated sums, requires explicit user acknowledgment.
-   - Discrepancies remain transparently reported in Section 3 (Sales Reconciliation).
-4. Accountant-Style Document Format & Omission Rules:
-   - When business details are unavailable, omit them (never print "Not Provided").
-   - Formal headings, clean tables, page numbers, Devanagari Marathi text, and ₹ symbol.
-   - No AI terminology in customer-facing PDF.
-5. Benchmark regression verification against ledger_02 (24 entries, 1 unpriced, ₹2,040 calc, ₹2,140 written).
+Verifies:
+1. Automatic AI Verification:
+   - High-confidence transactions (valid description, valid amount, zero flags) are automatically accepted.
+   - Users are not forced to manually confirm high-confidence transactions.
+   - Low-confidence transactions (unpriced, smudged, uncertain description) block PDF generation until resolved.
+2. Editable Transactions:
+   - Automatically accepted transactions remain fully editable and can be corrected or deleted.
+3. Automatic Recalculation after Deletion or Editing:
+   - Deleting an entry recalculates daily and overall totals.
+   - Deleted entries are completely excluded from the generated PDF.
+   - Editing an amount or description immediately updates the statement.
+4. Business Information Omission Rules:
+   - When business name/address are supplied, they appear in BUSINESS INFORMATION.
+   - When business details are unavailable, omit them cleanly (never print 'Business Name Not Provided' or 'Address Missing').
+5. Professional Accountant Document Structure:
+   - Final PDF contains ONLY finished financial statement data.
+   - Contains NO internal AI or review-status terminology ('Pending Confirmation', 'Human Reviewed', 'AI Extracted', 'Handwritten Subtotal', 'Calculated vs Handwritten', etc.).
+   - Uses conventional accountant terminology: Daily Sales Register, Section Total, Period Summary, Total.
 """
 
 import io
@@ -41,54 +43,84 @@ def _extract_pdf_text(pdf_bytes: bytes) -> str:
     return "\n".join(page.extract_text() for page in reader.pages)
 
 
-def _mark_all_entries_reviewed(extraction_data: dict) -> dict:
-    """Helper: Marks all entries across all groups as human_reviewed with existing values."""
-    for group in extraction_data["groups"]:
+# =============================================================================
+# 1. AUTOMATIC ACCEPTANCE & LOW-CONFIDENCE FLAGGING TESTS
+# =============================================================================
+
+def test_high_confidence_entries_automatically_accepted():
+    """
+    High-confidence transactions with clean descriptions and amounts are automatically
+    accepted and do NOT require the user to manually click-confirm every single entry.
+    """
+    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # In ledger_02, all 24 entries have valid descriptions, positive amounts, and 0 flags.
+    # Therefore they should be automatically accepted without needing human_reviewed status!
+    for group in data["groups"]:
         for entry in group["entries"]:
-            entry["review_status"] = "human_reviewed"
-            entry["corrected_marathi_text"] = entry["raw_marathi_text"]
-            entry["corrected_amount"] = entry["amount"]
-            entry["reviewed_at"] = "2026-11-01T15:00:00Z"
-    return extraction_data
+            entry["review_status"] = None  # Raw AI extraction
+
+    response = client.post(
+        "/api/reports/pdf",
+        json={
+            "extraction": data,
+            "business_name": "Radhika Beauty Salon",
+            "business_address": "Market Yard, Kolhapur",
+            "acknowledge_discrepancies": True,
+        },
+    )
+
+    # Must succeed with 200 without requiring manual confirmation of all 24 entries
+    assert response.status_code == 200
+    pdf_bytes = response.content
+    assert pdf_bytes.startswith(b"%PDF-")
+    text = _extract_pdf_text(pdf_bytes)
+    assert "BUSINESS SALES STATEMENT" in text
+    assert "Radhika Beauty Salon" in text
 
 
-# =============================================================================
-# 1. MANDATORY REVIEW GATE TESTS
-# =============================================================================
-
-def test_pdf_report_blocked_when_all_unreviewed():
-    """Raw AI extraction without human review is blocked with 422."""
+def test_low_confidence_or_unpriced_entry_blocks_pdf():
+    """
+    An entry with an unconfirmed missing amount (unpriced) or uncertainty flag
+    genuinely requires human attention in Step 2 and blocks PDF generation until resolved.
+    """
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_01_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Ensure no entries are reviewed
-    for group in data["groups"]:
-        for entry in group["entries"]:
-            entry["review_status"] = None
+    # Entry #10 ("peemnant smoothing") has amount: null and uncertain_fields: ['amount']
+    # It has NOT been reviewed yet.
+    entry10 = data["groups"][0]["entries"][9]
+    assert entry10["amount"] is None
+    entry10["review_status"] = None
 
     response = client.post(
         "/api/reports/pdf",
-        json={"extraction": data, "business_name": "Asha Beauty Parlour"},
+        json={
+            "extraction": data,
+            "business_name": "Asha Beauty Parlour",
+            "acknowledge_discrepancies": True,
+        },
     )
 
     assert response.status_code == 422
     err = response.json()["detail"]
     assert err["error"] == "review_gate_failed"
-    assert "not all entries have been reviewed" in err["message"]
-    assert err["unreviewed_count"] > 0
-    assert len(err["blocking_reasons"]) > 0
+    assert err["unresolved_count"] >= 1
+    assert any("Entry #10" in r for r in err["blocking_reasons"])
 
 
-def test_pdf_report_blocked_with_single_unreviewed_entry():
-    """PDF generation must be blocked if even ONE remaining transaction is unreviewed."""
+def test_missing_description_blocks_pdf():
+    """An entry with an unreadable or empty description blocks PDF until resolved."""
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Confirm 23 out of 24 entries, leave entry #24 unreviewed
-    _mark_all_entries_reviewed(data)
-    data["groups"][2]["entries"][-1]["review_status"] = "ai_extracted"
+    # Set one entry description to empty
+    data["groups"][0]["entries"][0]["raw_marathi_text"] = ""
+    data["groups"][0]["entries"][0]["corrected_marathi_text"] = ""
 
     response = client.post(
         "/api/reports/pdf",
@@ -102,117 +134,31 @@ def test_pdf_report_blocked_with_single_unreviewed_entry():
     assert response.status_code == 422
     err = response.json()["detail"]
     assert err["error"] == "review_gate_failed"
-    assert err["unreviewed_count"] == 1
-    assert "has not been confirmed by a human reviewer" in err["blocking_reasons"][0]
-
-
-def test_pdf_report_blocked_when_description_missing():
-    """PDF generation blocked if an entry has no description (unresolved missing value)."""
-    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_01_extracted.json"
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    _mark_all_entries_reviewed(data)
-    # Set entry 1 description to empty
-    data["groups"][0]["entries"][0]["raw_marathi_text"] = ""
-    data["groups"][0]["entries"][0]["corrected_marathi_text"] = ""
-
-    response = client.post(
-        "/api/reports/pdf",
-        json={
-            "extraction": data,
-            "business_name": "Asha Beauty Parlour",
-            "acknowledge_discrepancies": True,
-        },
-    )
-
-    assert response.status_code == 422
-    err = response.json()["detail"]
-    assert err["error"] == "review_gate_failed"
-    assert any("missing a description" in r for r in err["blocking_reasons"])
+    assert any("Entry #1" in r for r in err["blocking_reasons"])
 
 
 # =============================================================================
-# 2. DISCREPANCY ACKNOWLEDGMENT TESTS
+# 2. EDITING & DELETION RECALCULATION TESTS
 # =============================================================================
 
-def test_pdf_report_blocked_when_discrepancy_unacknowledged():
-    """If handwritten subtotals differ from calculated sum, user must acknowledge discrepancy."""
-    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_01_extracted.json"
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Group 1 has items summing to 400 but written subtotal 440 (₹40 difference)
-    _mark_all_entries_reviewed(data)
-
-    response = client.post(
-        "/api/reports/pdf",
-        json={
-            "extraction": data,
-            "business_name": "Asha Beauty Parlour",
-            "acknowledge_discrepancies": False,  # Not acknowledged
-        },
-    )
-
-    assert response.status_code == 422
-    err = response.json()["detail"]
-    assert err["error"] == "discrepancy_not_acknowledged"
-    assert "Handwritten subtotals differ from calculated totals" in err["message"]
-    assert len(err["discrepancies"]) > 0
-
-
-def test_pdf_report_enabled_when_all_confirmed_and_discrepancy_acknowledged():
-    """PDF is generated successfully when all entries are confirmed and discrepancy is acknowledged."""
-    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_01_extracted.json"
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    _mark_all_entries_reviewed(data)
-
-    response = client.post(
-        "/api/reports/pdf",
-        json={
-            "extraction": data,
-            "business_name": "Asha Beauty Parlour",
-            "business_address": "Shop 4, Shivaji Chowk, Pune",
-            "acknowledge_discrepancies": True,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/pdf"
-    pdf_bytes = response.content
-    assert pdf_bytes.startswith(b"%PDF-")
-
-
-# =============================================================================
-# 3. DELETION AND RECALCULATION TESTS
-# =============================================================================
-
-def test_pdf_report_enabled_after_transaction_deleted_and_totals_recalculate():
+def test_deleting_entry_recalculates_totals_and_excludes_from_pdf():
     """
-    Test flow:
-    - User extracts ledger_02 (24 entries).
-    - User deletes an unwanted/incorrect transaction (e.g. Group 1 entry #1, ₹20).
-    - Remaining 23 entries are confirmed.
-    - PDF generation succeeds.
-    - Totals recalculate: Group 1 calculated total decreases by ₹20.
+    When a transaction is deleted:
+    - It is excluded from the section and overall totals.
+    - It does not appear in the generated PDF.
+    - Daily and overall totals recalculate immediately.
     """
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Delete first entry of Group 1 (amount = 20)
-    original_g1_count = len(data["groups"][0]["entries"])
-    deleted_entry = data["groups"][0]["entries"].pop(0)
-    assert len(data["groups"][0]["entries"]) == original_g1_count - 1
+    # Initial Section 1 has 13 entries summing to 740.
+    # Delete Entry #1 (amount = 20)
+    data["groups"][0]["entries"].pop(0)
 
     # Re-index remaining entries
     for idx, e in enumerate(data["groups"][0]["entries"]):
         e["entry_index"] = idx + 1
-
-    # Confirm all remaining entries
-    _mark_all_entries_reviewed(data)
 
     response = client.post(
         "/api/reports/pdf",
@@ -227,48 +173,140 @@ def test_pdf_report_enabled_after_transaction_deleted_and_totals_recalculate():
     pdf_bytes = response.content
     text = _extract_pdf_text(pdf_bytes)
 
-    # Total entries should now be 23 (was 24)
-    # Section 1 transactions count box: 12 (was 13)
-    assert "SECTION 1 TOTALS" in text
-    assert "12" in text
-
-    # Section 1 calculated sum was 740, now 740 - 20 = 720.00
+    # Section 1 total was 740.00, now 740 - 20 = 720.00
     assert "720.00" in text
+    # Section 1 transaction count is now 12 (was 13)
+    assert "12" in text
+    # Overall sales was 2,100, now 2,080.00
+    assert "2,080.00" in text
 
 
-# =============================================================================
-# 4. BENCHMARK REGRESSION & TEMPLATE TESTS (ledger_02)
-# =============================================================================
-
-def test_pdf_report_benchmark_regression_ledger_02():
+def test_editing_amount_recalculates_totals():
     """
-    Benchmark scenario matching Section 6 requirements:
-    - 3 ledger sections.
-    - 24 entries (13 + 5 + 6).
-    - 23 priced entries, 1 unpriced entry ("Not Recorded").
-    - Calculated total: ₹2,040.
-    - Recorded subtotals: ₹2,140.
-    - Difference: ₹100.
-    - All 24 entries confirmed by human reviewer (including confirming unpriced as-is).
-    - Discrepancy acknowledged.
+    When an amount is edited (e.g. entry #1 changed from 20 to 50):
+    - Daily total increases by 30 (740 -> 770).
+    - Overall sales total increases by 30 (2,100 -> 2,130).
+    - Statement reflects edited total.
     """
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 1. In Group 3, set entry 2 ("यु कट amt: 60") to unpriced:
-    g3 = data["groups"][2]
-    entry_unpriced = g3["entries"][1]
-    entry_unpriced["amount"] = None
-    entry_unpriced["flag_reason"] = "Amount not recorded on physical ledger"
-    entry_unpriced["uncertain_fields"] = ["amount"]
+    # Edit entry 1 amount from 20 to 50 (+30)
+    e1 = data["groups"][0]["entries"][0]
+    e1["review_status"] = "human_reviewed"
+    e1["corrected_amount"] = 50
 
-    # 2. Mark all entries as human confirmed (human confirmed the unpriced entry as Not Recorded)
-    _mark_all_entries_reviewed(data)
-    entry_unpriced["corrected_amount"] = None  # Confirmed as unpriced
+    response = client.post(
+        "/api/reports/pdf",
+        json={
+            "extraction": data,
+            "business_name": "Radhika Beauty Salon",
+            "acknowledge_discrepancies": True,
+        },
+    )
 
-    # Ensure no written page grand total
-    data["recorded_page_total"] = None
+    assert response.status_code == 200
+    text = _extract_pdf_text(response.content)
+
+    # Section 1 total is now 740 + 30 = 770.00
+    assert "770.00" in text
+    # Overall sales is now 2,100 + 30 = 2,130.00
+    assert "2,130.00" in text
+
+
+def test_auto_accepted_entries_remain_editable():
+    """
+    Automatically accepted entries remain fully editable by the user.
+    Editing a description or amount updates the statement.
+    """
+    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # User modifies an auto-accepted description to a custom service note
+    e2 = data["groups"][0]["entries"][1]
+    e2["review_status"] = "human_reviewed"
+    e2["corrected_marathi_text"] = "हेअर स्पा स्पेशल"
+
+    response = client.post(
+        "/api/reports/pdf",
+        json={
+            "extraction": data,
+            "business_name": "Radhika Beauty Salon",
+            "acknowledge_discrepancies": True,
+        },
+    )
+
+    assert response.status_code == 200
+    text = _extract_pdf_text(response.content)
+    assert "हेअर स्पा स्पेशल" in text
+
+
+# =============================================================================
+# 3. DISCREPANCY ACKNOWLEDGMENT TEST
+# =============================================================================
+
+def test_unacknowledged_discrepancy_blocks_pdf():
+    """If handwritten subtotals differ from calculated sum, user must acknowledge in Step 2."""
+    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_01_extracted.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # In ledger_01, entries 1-9 sum to 430 (90 + 30*6 + 80 + 80).
+    # Group 1 handwritten recorded total is 440.
+    # Group 2 entries sum to 230, matching handwritten recorded total of 230.
+    # If entry 10 is reviewed with amount = 50, calculated total = 480 != 440.
+    e10 = data["groups"][0]["entries"][9]
+    e10["review_status"] = "human_reviewed"
+    e10["corrected_amount"] = 50  # sum = 480 != 440
+
+    response = client.post(
+        "/api/reports/pdf",
+        json={
+            "extraction": data,
+            "business_name": "Asha Beauty Parlour",
+            "acknowledge_discrepancies": False,  # Not acknowledged -> 422
+        },
+    )
+    assert response.status_code == 422
+    err = response.json()["detail"]
+    assert err["error"] == "discrepancy_not_acknowledged"
+
+    # Now acknowledge discrepancy -> succeeds with 200
+    response_ack = client.post(
+        "/api/reports/pdf",
+        json={
+            "extraction": data,
+            "business_name": "Asha Beauty Parlour",
+            "acknowledge_discrepancies": True,  # Acknowledged -> 200
+        },
+    )
+    assert response_ack.status_code == 200
+    assert response_ack.headers["content-type"] == "application/pdf"
+
+
+# =============================================================================
+# 4. FINAL PDF CONTAINS NO INTERNAL AI / WORKFLOW TERMINOLOGY
+# =============================================================================
+
+def test_final_pdf_contains_no_internal_ai_or_review_terms():
+    """
+    Customer-facing PDF must look like an official accountant-prepared sales register.
+    It must NOT contain:
+    - Pending Confirmation
+    - Human Reviewed
+    - AI Extracted
+    - AI Confidence
+    - Exact Match
+    - Handwritten Subtotal
+    - Calculated vs Handwritten
+    - Business Name Not Provided
+    - Address Missing
+    """
+    path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
     response = client.post(
         "/api/reports/pdf",
@@ -281,55 +319,51 @@ def test_pdf_report_benchmark_regression_ledger_02():
     )
 
     assert response.status_code == 200
-    pdf_bytes = response.content
-    text = _extract_pdf_text(pdf_bytes)
+    text = _extract_pdf_text(response.content)
 
-    # Visual hierarchy headings
+    forbidden_phrases = [
+        "Pending Confirmation",
+        "Human Reviewed",
+        "AI Extracted",
+        "AI Confidence",
+        "Exact Match",
+        "Handwritten Subtotal",
+        "Calculated vs Handwritten",
+        "Calculated total",
+        "Business Name Not Provided",
+        "Address Missing",
+        "Machine Learning",
+        "Gemini",
+        "LLM",
+        "Prompt",
+    ]
+
+    for phrase in forbidden_phrases:
+        assert phrase.lower() not in text.lower(), f"Forbidden internal term '{phrase}' found in final PDF!"
+
+    # Must contain conventional accountant terminology:
     assert "BUSINESS SALES STATEMENT" in text
     assert "Supporting Financial Records" in text
-    assert "INR" in text
-    assert "₹" in text
     assert "1. DAILY SALES REGISTER" in text
-    assert "SECTION 1 TOTALS" in text
-    assert "SECTION 2 TOTALS" in text
-    assert "SECTION 3 TOTALS" in text
     assert "2. PERIOD SUMMARY" in text
-    assert "3. SALES RECONCILIATION" in text
+    assert "3. DAILY REGISTER SUMMARY" in text
+    assert "Total Sales" in text
+    assert "Total" in text
     assert "IMPORTANT NOTE" in text
 
-    # Dynamic totals:
-    # Calculated total: ₹ 2,040.00
-    assert "2,040.00" in text, "Calculated total 2,040.00 missing from PDF"
-    # Recorded subtotals: ₹ 2,140.00
-    assert "2,140.00" in text, "Recorded subtotals 2,140.00 missing from PDF"
-    # Reconciliation differences (40 + 0 + 60 = 100)
-    assert "40.00" in text
-    assert "60.00" in text
-
-    # Unpriced item has "Not Recorded"
-    assert "Not Recorded" in text
-    assert "Not present" in text  # Written grand total not present
-
-    # Forbidden AI terms check
-    forbidden_terms = ["AI Extracted", "AI vision", "Gemini", "LLM", "Prompt", "machine learning"]
-    for term in forbidden_terms:
-        assert term.lower() not in text.lower(), f"Forbidden AI term '{term}' found in customer-facing PDF!"
-
 
 # =============================================================================
-# 5. BUSINESS INFORMATION OMISSION RULES
+# 5. BUSINESS INFORMATION FORMATTING AND CLEAN OMISSION
 # =============================================================================
 
-def test_pdf_report_omits_business_details_when_not_provided():
+def test_business_details_cleanly_omitted_when_unavailable():
     """
-    When business information is not provided by the user, omit the fields.
-    Never print 'Business Name Not Provided', 'Not Provided', or similar placeholders.
+    When business details are not provided by the user, omit the fields.
+    Never print 'Business Name Not Provided', 'Address Missing', or 'Not Provided'.
     """
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-
-    _mark_all_entries_reviewed(data)
 
     response = client.post(
         "/api/reports/pdf",
@@ -344,23 +378,15 @@ def test_pdf_report_omits_business_details_when_not_provided():
     assert response.status_code == 200
     text = _extract_pdf_text(response.content)
 
-    # Must NOT contain 'Not Provided'
     assert "Not Provided" not in text
     assert "not provided" not in text.lower()
-    # Must still have reporting period and date
+    assert "Address Missing" not in text
     assert "Reporting period:" in text
     assert "Prepared on:" in text
 
 
-# =============================================================================
-# 6. SECTIONS SHARING SAME DATE
-# =============================================================================
-
 def test_pdf_report_sections_sharing_same_date():
-    """
-    Verifies that two handwritten sections sharing the exact same date
-    remain preserved as separate sections (Section 1 and Section 2).
-    """
+    """Multiple sections sharing the exact same date are preserved separately in the register."""
     path = Path(__file__).resolve().parent / "data" / "extraction_results" / "ledger_02_extracted.json"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -370,8 +396,6 @@ def test_pdf_report_sections_sharing_same_date():
     data["groups"][1]["date_iso"] = "2019-11-11"
     data["groups"][1]["date_raw"] = "११/११/२०१९"
 
-    _mark_all_entries_reviewed(data)
-
     response = client.post(
         "/api/reports/pdf",
         json={
@@ -380,18 +404,15 @@ def test_pdf_report_sections_sharing_same_date():
             "acknowledge_discrepancies": True,
         },
     )
+
     assert response.status_code == 200
     text = _extract_pdf_text(response.content)
 
-    assert "SECTION 1 TOTALS" in text
-    assert "SECTION 2 TOTALS" in text
+    assert "SECTION 1 TOTAL" in text
+    assert "SECTION 2 TOTAL" in text
     assert "11/11/2019 / Section 1" in text
     assert "11/11/2019 / Section 2" in text
 
-
-# =============================================================================
-# 7. INVALID PAYLOAD
-# =============================================================================
 
 def test_pdf_report_invalid_payload():
     """Posting invalid extraction structure returns 422 Unprocessable Entity."""
