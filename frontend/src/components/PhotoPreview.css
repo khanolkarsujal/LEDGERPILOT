@@ -100,6 +100,12 @@
 
 .photo-preview__actions {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.photo-preview__secondary-actions {
+  display: flex;
   gap: 12px;
 }
 
@@ -117,6 +123,35 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.photo-preview__btn--extract {
+  background-color: var(--accent-primary);
+  color: #FFFFFF;
+  border: 1px solid var(--accent-primary);
+  font-size: 1rem;
+}
+
+.photo-preview__btn--extract:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.photo-preview__btn--extract:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.photo-preview__spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .photo-preview__btn--replace {

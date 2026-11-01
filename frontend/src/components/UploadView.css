@@ -116,6 +116,20 @@
   color: var(--accent-primary);
 }
 
+.upload-view__loading-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.upload-view__loading-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.4;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);

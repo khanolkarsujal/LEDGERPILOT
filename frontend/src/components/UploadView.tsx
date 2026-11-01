@@ -1,18 +1,32 @@
 import { useState, useRef, useEffect, type ChangeEvent, type DragEvent } from 'react';
 import { Upload, Camera, AlertTriangle, Loader2 } from 'lucide-react';
 import { PhotoPreview } from './PhotoPreview';
+import { LiveProcessingView } from './LiveProcessingView';
 import { formatFileSize } from '../utils/format';
+import { createExtractionJob, pollExtractionJob, ExtractionApiError } from '../api';
+import type { LedgerPageExtraction, JobStatusResponse, JobEvent } from '../types/extraction';
 import './UploadView.css';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png'];
 const ALLOWED_EXTENSIONS_REGEX = /\.(jpe?g|png)$/i;
 
-export function UploadView() {
+interface UploadViewProps {
+  onExtractionSuccess?: (
+    result: LedgerPageExtraction,
+    file: File,
+    previewUrl: string,
+    events: JobEvent[]
+  ) => void;
+}
+
+export function UploadView({ onExtractionSuccess }: UploadViewProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const [currentJob, setCurrentJob] = useState<JobStatusResponse | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +120,8 @@ export function UploadView() {
     setSelectedFile(null);
     setPreviewUrl(null);
     setErrorMessage(null);
+    setCurrentJob(null);
+    setIsExtracting(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -124,6 +140,66 @@ export function UploadView() {
     }
   };
 
+  const handleExtract = async () => {
+    if (!selectedFile) return;
+    setErrorMessage(null);
+    setIsExtracting(true);
+
+    try {
+      // 1. Create job on backend
+      const initialJob = await createExtractionJob(selectedFile);
+      setCurrentJob(initialJob);
+
+      // 2. Poll job status until completed, updating UI with real events
+      const completedJob = await pollExtractionJob(
+        initialJob.job_id,
+        (updatedJob) => {
+          setCurrentJob(updatedJob);
+        }
+      );
+
+      if (completedJob.result) {
+        setIsExtracting(false);
+        if (onExtractionSuccess) {
+          onExtractionSuccess(
+            completedJob.result,
+            selectedFile,
+            previewUrl!,
+            completedJob.events
+          );
+        }
+      } else {
+        throw new Error('Backend completed processing but returned an empty extraction result.');
+      }
+    } catch (err: unknown) {
+      if (err instanceof ExtractionApiError) {
+        setErrorMessage(err.message);
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage('An unexpected error occurred during extraction. Please try again.');
+      }
+    }
+  };
+
+  // If extraction is actively running or has failed in the live view, render LiveProcessingView
+  if (isExtracting && selectedFile && previewUrl) {
+    return (
+      <LiveProcessingView
+        job={currentJob}
+        selectedFile={selectedFile}
+        previewUrl={previewUrl}
+        errorMessage={errorMessage}
+        onRetry={handleExtract}
+        onCancel={() => {
+          setIsExtracting(false);
+          setCurrentJob(null);
+          setErrorMessage(null);
+        }}
+      />
+    );
+  }
+
   return (
     <section className="upload-view" aria-labelledby="upload-heading">
       <header className="upload-view__header">
@@ -131,12 +207,12 @@ export function UploadView() {
           Upload Ledger Page
         </h2>
         <p className="upload-view__subtitle">
-          Take a photo of a handwritten ledger page or upload an image to convert
-          it into digital records.
+          Take a photo of a handwritten Marathi ledger page or upload an image to convert
+          it into structured digital financial records.
         </p>
       </header>
 
-      {/* Hidden native file input supporting both mobile camera & gallery */}
+      {/* Hidden native file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -181,10 +257,12 @@ export function UploadView() {
           previewUrl={previewUrl}
           onRemove={handleRemove}
           onReplace={handleReplace}
+          onExtract={handleExtract}
+          isExtracting={isExtracting}
         />
       )}
 
-      {/* Empty / Initial Upload State */}
+      {/* Empty / Initial Upload Dropzone */}
       {!isLoading && !selectedFile && (
         <div
           className={`upload-view__dropzone ${

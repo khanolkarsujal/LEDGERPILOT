@@ -1,4 +1,4 @@
-import { Trash2, RefreshCw, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { Trash2, RefreshCw, CheckCircle2, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
 import { formatFileSize } from '../utils/format';
 import './PhotoPreview.css';
 
@@ -7,6 +7,8 @@ interface PhotoPreviewProps {
   previewUrl: string;
   onRemove: () => void;
   onReplace: () => void;
+  onExtract?: () => void;
+  isExtracting?: boolean;
 }
 
 export function PhotoPreview({
@@ -14,6 +16,8 @@ export function PhotoPreview({
   previewUrl,
   onRemove,
   onReplace,
+  onExtract,
+  isExtracting = false,
 }: PhotoPreviewProps) {
   return (
     <div className="photo-preview" aria-label="Selected ledger photo preview">
@@ -46,25 +50,51 @@ export function PhotoPreview({
         </div>
 
         <div className="photo-preview__actions">
-          <button
-            type="button"
-            className="photo-preview__btn photo-preview__btn--replace"
-            onClick={onReplace}
-            aria-label="Replace selected photo"
-          >
-            <RefreshCw size={18} aria-hidden="true" />
-            <span>Replace Photo</span>
-          </button>
+          {onExtract && (
+            <button
+              type="button"
+              className="photo-preview__btn photo-preview__btn--extract"
+              onClick={onExtract}
+              disabled={isExtracting}
+              aria-label="Process and extract records from this ledger photo"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 size={18} className="photo-preview__spinner" aria-hidden="true" />
+                  <span>Extracting Records...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} aria-hidden="true" />
+                  <span>Extract Records</span>
+                </>
+              )}
+            </button>
+          )}
 
-          <button
-            type="button"
-            className="photo-preview__btn photo-preview__btn--remove"
-            onClick={onRemove}
-            aria-label="Remove selected photo"
-          >
-            <Trash2 size={18} aria-hidden="true" />
-            <span>Remove</span>
-          </button>
+          <div className="photo-preview__secondary-actions">
+            <button
+              type="button"
+              className="photo-preview__btn photo-preview__btn--replace"
+              onClick={onReplace}
+              disabled={isExtracting}
+              aria-label="Replace selected photo"
+            >
+              <RefreshCw size={18} aria-hidden="true" />
+              <span>Replace Photo</span>
+            </button>
+
+            <button
+              type="button"
+              className="photo-preview__btn photo-preview__btn--remove"
+              onClick={onRemove}
+              disabled={isExtracting}
+              aria-label="Remove selected photo"
+            >
+              <Trash2 size={18} aria-hidden="true" />
+              <span>Remove</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
